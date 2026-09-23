@@ -1405,6 +1405,7 @@ document.getElementById('btnJoinInit').addEventListener('click', () => {
           break;
         }
         case 'START_RHYME_PHASE': {
+          setConnectionStatus('Connected — round in progress', 'online');
           currentRound = data.round;
           currentTimerSeconds = data.timerSeconds;
           engine.mode = data.mode;
@@ -1414,6 +1415,7 @@ document.getElementById('btnJoinInit').addEventListener('click', () => {
           break;
         }
         case 'VOTE_START':
+          setConnectionStatus('Connected — making predictions', 'online');
           showVote(data.players, data.round);
           break;
         case 'VOTE_STATUS':
@@ -1426,9 +1428,11 @@ document.getElementById('btnJoinInit').addEventListener('click', () => {
           openClientJudgingPhase(data.targetWord, data.submissions);
           break;
         case 'ROUND_OVER':
+          setConnectionStatus('Connected to room', 'online');
           displayResults(data.results, data.players, data.eliminatedNames, data.gameOver, data.winnerName);
           break;
         case 'LOBBY_RETURN':
+          setConnectionStatus('Connected to room', 'online');
           currentRound = 1; localScore = 0;
           UIManager.updateHeader(1, 0, engine.mode, false);
           UIManager.showView('lobbyView');

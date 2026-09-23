@@ -1,6 +1,6 @@
-# Rhyme Match deployment
+# Rhyme Match
 
-This is a static browser game. Upload `index.html` to any HTTPS static host. For GitHub Pages, put it at the root of a repository, then enable Pages in the repository settings with the main branch as the source. Share the resulting site URL. A host can then open a room and use **Copy join link**; the link fills in the room code for guests.
+Play at **https://parrrm.github.io/rhyme-match-game/**. A host can open a room and use **Copy join link**; the link fills in the room code for guests. This repository is deployed with GitHub Pages from the `main` branch. The PeerJS browser library is bundled with the site.
 
 No account, build step, database, or app installation is needed. Players need a current browser and an internet connection. The game uses PeerJS for peer-to-peer multiplayer and its default signaling service. Some restrictive networks may block a direct connection; if that becomes common, add a TURN relay or migrate room state to a managed realtime service.
 
