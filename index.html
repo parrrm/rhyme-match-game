@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e1c">
 <title>Rhyme Match</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="./peerjs.min.js"></script>
+<script src="./qrcode.js"></script>
 <style>
 /* ============================================================
    TOKENS — "Arcade Grid": a neon gaming-lounge identity.
@@ -24,7 +26,7 @@
   --confetti:#b6ff3c;   /* volt green — success, valid, matches, Classic */
   --danger:#ff3b3b;     /* clean red — invalid, penalties only */
   --paper:#eef1ff;      /* cool near-white text */
-  --muted:#8891c4;      /* secondary text */
+  --muted:#b0b9d9;      /* secondary text */
   --line:#262d52;       /* hairline borders */
   --mode-accent:#b6ff3c; /* set per-mode by JS — colors the stage, ring & pill */
   --mode-glow: rgba(182,255,60,.32);
@@ -32,7 +34,7 @@
   --radius-lg: 26px;
   --radius-md: 16px;
   --radius-sm: 10px;
-  --font-display:'Titan One', ui-rounded, 'Segoe UI', sans-serif;
+  --font-display:'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-body:'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   box-sizing:border-box;
   padding-top: env(safe-area-inset-top, 0px);
@@ -46,7 +48,8 @@ html{ scroll-padding-top: env(safe-area-inset-top, 0px); }
 
 body{
   margin:0;
-  min-height:100%;
+  min-height:100vh;
+  min-height:100svh;
   background:
     radial-gradient(900px 520px at 8% -6%, rgba(41,226,255,.16) 0%, transparent 58%),
     radial-gradient(850px 500px at 104% 2%, rgba(255,46,147,.14) 0%, transparent 55%),
@@ -59,17 +62,18 @@ body{
   padding:18px 14px calc(18px + env(safe-area-inset-bottom,0px));
   display:flex;
   justify-content:center;
+  align-items:center;
 }
 :focus-visible{ outline:2px solid var(--spotlight); outline-offset:2px; border-radius:6px; }
 
 .app-wrapper{
   width:100%;
-  max-width:920px;
+  max-width:1260px;
   display:flex;
   gap:18px;
-  align-items:flex-start;
+  align-items:stretch;
 }
-@media (max-width:860px){ .app-wrapper{ flex-direction:column; } }
+@media (max-width:860px){ body{ align-items:flex-start; } .app-wrapper{ flex-direction:column; } }
 
 /* ============================================================
    PRIMITIVES
@@ -82,7 +86,7 @@ body{
   border:1px solid var(--line);
   border-radius:var(--radius-lg);
   box-shadow:var(--shadow);
-  padding:26px 24px 24px;
+  padding:clamp(24px,3vw,38px);
   overflow-x:hidden;
 }
 @media (max-width:480px){ .container{ padding:20px 16px 18px; } }
@@ -91,7 +95,7 @@ body{
 .view.active{ display:block; animation:viewIn .32s cubic-bezier(.22,1,.36,1); }
 @keyframes viewIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
 
-h1,h2,h3{ font-family:var(--font-display); margin:0 0 6px; line-height:1.15; font-weight:600; }
+h1,h2,h3{ font-family:var(--font-display); margin:0 0 8px; line-height:1.22; font-weight:800; text-wrap:balance; }
 p{ margin:0 0 10px; color:var(--muted); line-height:1.5; }
 
 .brand{
@@ -99,7 +103,8 @@ p{ margin:0 0 10px; color:var(--muted); line-height:1.5; }
   margin-bottom:22px;
 }
 .brand-title{
-  font-size:clamp(30px,7vw,42px);
+  font-family:'Titan One', ui-rounded, 'Segoe UI', sans-serif;
+  font-size:clamp(32px,5vw,48px);
   font-weight:700;
   letter-spacing:.5px;
   background:linear-gradient(135deg, var(--spotlight), #f2f0ff 45%, var(--curtain));
@@ -108,7 +113,7 @@ p{ margin:0 0 10px; color:var(--muted); line-height:1.5; }
   color:transparent;
   margin-bottom:4px;
 }
-.brand-tagline{ color:var(--muted); font-size:14.5px; margin:0; }
+.brand-tagline{ color:var(--muted); font-size:16px; margin:0; }
 .confetti-decor{ display:flex; justify-content:center; gap:9px; margin:12px 0 2px; }
 .confetti-decor span{ width:8px; height:8px; border-radius:2px; display:inline-block; animation:floatDot 2.4s ease-in-out infinite; }
 .confetti-decor span:nth-child(1){ background:#ff2e93; animation-delay:0s; }
@@ -121,7 +126,7 @@ p{ margin:0 0 10px; color:var(--muted); line-height:1.5; }
 
 label.field-label{
   display:block;
-  font-size:13px;
+  font-size:14px;
   color:var(--muted);
   font-weight:600;
   margin-bottom:6px;
@@ -140,7 +145,7 @@ input[type="text"], input[type="password"]{
   outline:none;
   transition:border-color .15s ease, box-shadow .15s ease;
 }
-input[type="text"]::placeholder, input[type="password"]::placeholder{ color:#7c74a8; }
+input[type="text"]::placeholder, input[type="password"]::placeholder{ color:#aeb6d5; }
 input[type="text"]:focus, input[type="password"]:focus{
   border-color:var(--spotlight);
   box-shadow:0 0 0 4px rgba(41,226,255,.18);
@@ -202,10 +207,10 @@ button.btn-block{ width:100%; }
   gap:10px;
   flex-wrap:wrap;
 }
-.stat{ font-size:12.5px; color:var(--muted); text-align:center; }
+.stat{ font-size:14px; color:var(--muted); text-align:center; }
 .stat-val{ display:block; font-family:var(--font-display); font-weight:600; color:var(--spotlight); font-size:17px; }
 .mode-pill{
-  font-size:11.5px; font-weight:700; color:#0a0e1c; background:var(--mode-accent);
+  font-size:13px; font-weight:800; color:#0a0e1c; background:var(--mode-accent);
   padding:4px 11px; border-radius:999px; white-space:nowrap; transition:background .3s ease;
 }
 .mode-pill.out{ background:var(--danger); color:#fff; }
@@ -221,6 +226,10 @@ button.btn-block{ width:100%; }
 .menu-panel.active{ display:block; animation:viewIn .25s ease; }
 
 .room-code-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 180px;
+  align-items:center;
+  gap:22px;
   background:var(--stage-2);
   border:1.5px dashed var(--spotlight);
   border-radius:var(--radius-md);
@@ -228,14 +237,22 @@ button.btn-block{ width:100%; }
   margin:14px 0;
 }
 .room-code-value{
-  font-family:var(--font-display);
-  font-size:clamp(22px,6vw,30px);
-  font-weight:600;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:clamp(15px,1.45vw,19px);
+  font-weight:700;
   color:var(--spotlight);
-  word-break:break-all;
-  letter-spacing:1px;
+  overflow-wrap:anywhere;
+  letter-spacing:.1px;
 }
-.copy-row{ display:flex; gap:8px; justify-content:center; align-items:center; margin-top:10px; flex-wrap:wrap; }
+.copy-row{ display:flex; gap:8px; justify-content:flex-start; align-items:center; margin-top:16px; flex-wrap:wrap; }
+.room-qr{ display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
+.room-qr[hidden]{ display:none; }
+.room-qr-code{ width:180px; height:180px; display:grid; place-items:center; background:white; padding:8px; border-radius:14px; }
+.room-qr-code svg{ display:block; width:100%; height:100%; }
+.room-qr-label{ margin:0; font-size:13px; font-weight:700; color:var(--paper); }
+.room-share-label{ font-weight:800; color:var(--paper); font-size:16px; margin-bottom:8px; }
+.room-share-hint{ font-size:14px; margin-top:8px; }
+@media (max-width:650px){ .room-code-card{ grid-template-columns:1fr; } .room-qr{ grid-row:1; } .room-qr-code{ width:172px; height:172px; } .copy-row{ justify-content:center; } .room-share-info{ text-align:center; } }
 
 .roster{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:10px 0; }
 .player-chip{
@@ -262,12 +279,15 @@ button.btn-block{ width:100%; }
   border-radius:var(--radius-md);
   padding:13px 14px;
   cursor:pointer;
+  color:var(--paper);
+  width:100%;
+  box-shadow:none;
   transition:border-color .15s ease, transform .1s ease;
 }
 .mode-card:hover{ border-color:var(--muted); }
 .mode-card.selected{ border-color:var(--spotlight); background:#10283d; box-shadow:0 0 0 3px rgba(41,226,255,.18); }
-.mode-card-title{ font-family:var(--font-display); font-weight:600; font-size:15px; margin-bottom:3px; display:flex; align-items:center; gap:6px; }
-.mode-card-desc{ font-size:12.5px; color:var(--muted); margin:0; line-height:1.4; }
+.mode-card-title{ font-family:var(--font-display); font-weight:800; font-size:16px; margin-bottom:3px; display:flex; align-items:center; gap:6px; }
+.mode-card-desc{ display:block; font-size:14px; color:var(--muted); margin:0; line-height:1.4; }
 .mode-readonly{
   display:flex; align-items:center; justify-content:center; gap:8px;
   background:var(--stage-2); border-radius:var(--radius-md); padding:12px; margin:14px 0; border:1px solid var(--line);
@@ -344,11 +364,11 @@ button.btn-block{ width:100%; }
   gap:10px;
 }
 .judge-item.matched{ border-color:var(--confetti); }
-.judge-name{ font-size:13px; color:var(--muted); font-weight:600; }
+.judge-name{ font-size:14px; color:var(--muted); font-weight:600; }
 .judge-word{ font-family:var(--font-display); font-size:18px; font-weight:600; color:var(--paper); }
 .judge-word.timeout{ font-style:italic; color:var(--danger); font-family:var(--font-body); font-size:14px; font-weight:600; }
-.match-badge{ font-size:10.5px; background:var(--confetti); color:#16210a; padding:2px 8px; border-radius:999px; font-weight:700; margin-left:6px; }
-.judge-toggle-btn{ padding:7px 13px; font-size:12.5px; box-shadow:none; }
+.match-badge{ font-size:12px; background:var(--confetti); color:#16210a; padding:2px 8px; border-radius:999px; font-weight:700; margin-left:6px; }
+.judge-toggle-btn{ padding:9px 14px; font-size:14px; box-shadow:none; }
 
 /* ============================================================
    RESULTS
@@ -368,7 +388,7 @@ button.btn-block{ width:100%; }
 .result-row.neutral{ border-left-color:var(--line); }
 .result-row.out{ opacity:.5; }
 .result-name{ font-weight:700; font-size:14px; }
-.result-word{ font-size:13px; color:var(--muted); }
+.result-word{ font-size:14px; color:var(--muted); }
 .result-delta{ font-family:var(--font-display); font-weight:600; font-size:15px; white-space:nowrap; }
 .result-delta.positive{ color:var(--confetti); }
 .result-delta.negative{ color:var(--danger); }
@@ -398,7 +418,7 @@ button.btn-block{ width:100%; }
    SCOREBOARD — podium + list
    ============================================================ */
 .sidebar{
-  width:260px; flex-shrink:0;
+  width:300px; flex-shrink:0;
   background:linear-gradient(180deg, var(--stage) 0%, #191636 100%);
   border:1px solid var(--line);
   border-radius:var(--radius-lg);
@@ -416,9 +436,9 @@ button.btn-block{ width:100%; }
 .podium-slot.second .podium-bar{ height:46px; background:#cfe0ff; color:#0a0e1c; }
 .podium-slot.third .podium-bar{ height:34px; background:#e0904f; color:#0a0e1c; }
 .podium-medal{ font-size:20px; }
-.podium-name{ font-size:11.5px; margin-top:4px; font-weight:600; color:var(--paper); word-break:break-word; }
+.podium-name{ font-size:13px; margin-top:4px; font-weight:600; color:var(--paper); word-break:break-word; }
 .score-list{ list-style:none; margin:0; padding:0; }
-.score-list li{ display:flex; justify-content:space-between; padding:7px 4px; font-size:13.5px; border-bottom:1px solid var(--line); }
+.score-list li{ display:flex; justify-content:space-between; padding:8px 4px; font-size:14px; border-bottom:1px solid var(--line); }
 .score-list li:last-child{ border-bottom:none; }
 .score-list .rank{ color:var(--muted); width:22px; display:inline-block; }
 .score-list li.eliminated{ opacity:.45; text-decoration:line-through; }
@@ -467,7 +487,7 @@ button.btn-block{ width:100%; }
   padding:22px; max-width:340px; width:100%; text-align:center; box-shadow:var(--shadow);
 }
 
- .connection-status{ text-align:center; font-size:12px; font-weight:700; margin:-8px 0 14px; color:var(--muted); }
+ .connection-status{ text-align:center; font-size:14px; font-weight:700; margin:-8px 0 14px; color:var(--muted); }
  .connection-status.online{ color:var(--confetti); }
  .connection-status.pending{ color:var(--spotlight); }
  .connection-status.error{ color:var(--danger); }
@@ -475,6 +495,22 @@ button.btn-block{ width:100%; }
  .vote-choices{ display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin:18px 0; }
  .vote-choices button{ min-width:0; white-space:normal; overflow-wrap:anywhere; }
 
+.visually-hidden{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+/* Desktop layout makes the start and lobby screens use the available width. */
+@media (min-width:861px){
+  #menuView.active{ display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,.9fr); gap:clamp(26px,5vw,72px); align-items:center; min-height:360px; }
+  #menuView .menu-intro{ display:block; padding:24px 10px 24px 6px; }
+  .menu-form{ background:var(--stage-2); border:1px solid var(--line); border-radius:var(--radius-lg); padding:28px; }
+  .lobby-layout{ display:grid; grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr); gap:24px; align-items:start; }
+  .lobby-options{ background:rgba(28,37,68,.48); border:1px solid var(--line); border-radius:var(--radius-lg); padding:22px; }
+}
+.menu-intro{ display:none; }
+.menu-intro h2{ font-size:clamp(32px,3.3vw,48px); line-height:1.1; margin-bottom:18px; }
+.menu-intro p{ font-size:18px; max-width:34ch; }
+.menu-steps{ display:grid; gap:12px; margin-top:24px; }
+.menu-step{ display:flex; gap:14px; align-items:center; font-size:16px; font-weight:700; }
+.menu-step span{ display:grid; place-items:center; width:34px; height:34px; flex:none; border-radius:10px; background:var(--stage-2); color:var(--spotlight); }
+@media (max-width:860px){ .lobby-layout{ display:block; } }
 /* Confetti burst (reserved for the big win moment) */
 .confetti-piece{
   position:fixed; top:-10px; width:8px; height:14px; z-index:95; pointer-events:none;
@@ -510,7 +546,7 @@ button.btn-block{ width:100%; }
   <div class="container">
 
     <div class="brand" id="brandHeader">
-      <div class="brand-title">Rhyme Match</div>
+      <h1 class="brand-title">Rhyme Match</h1>
       <p class="brand-tagline">Secretly rhyme. Publicly reveal. See who's on your wavelength.</p>
       <div class="confetti-decor" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
     </div>
@@ -533,6 +569,16 @@ button.btn-block{ width:100%; }
 
     <!-- 1. MAIN MENU -->
     <div id="menuView" class="view active">
+      <div class="menu-intro">
+        <h2>Find your rhyme twin.</h2>
+        <p>One word. A few seconds. A surprising match with someone in your group.</p>
+        <div class="menu-steps">
+          <div class="menu-step"><span>1</span> Share the room link</div>
+          <div class="menu-step"><span>2</span> Write a secret rhyme</div>
+          <div class="menu-step"><span>3</span> Reveal your matches</div>
+        </div>
+      </div>
+      <div class="menu-form">
       <label class="field-label" for="inputPlayerName">Your nickname</label>
       <input type="text" id="inputPlayerName" maxlength="15" placeholder="What should we call you?">
 
@@ -551,18 +597,28 @@ button.btn-block{ width:100%; }
         <input type="text" id="inputJoinId" placeholder="Paste the code here">
         <button class="btn-primary btn-block" id="btnJoinInit" style="margin-top:10px;">Join Game</button>
       </div>
+      </div>
     </div>
 
     <!-- 2. LOBBY -->
     <div id="lobbyView" class="view">
       <h2 id="lobbyTitle" style="text-align:center;">Game Lobby</h2>
 
+      <div class="lobby-layout">
+      <div class="lobby-share">
       <div class="room-code-card" id="roomCodeSection">
-        <p style="margin:0 0 4px;">Room code — share this to invite players</p>
-        <div class="room-code-value" id="displayPeerId">-</div>
-        <div class="copy-row">
-          <button class="btn-ghost btn-sm" id="btnCopyCode">📋 Copy code</button>
-          <button class="btn-ghost btn-sm" id="btnCopyLink">🔗 Copy join link</button>
+        <div class="room-share-info">
+          <p class="room-share-label">Invite Your Players</p>
+          <div class="room-code-value" id="displayPeerId" translate="no">-</div>
+          <p class="room-share-hint">Share the link, show the QR code, or send the room code.</p>
+          <div class="copy-row">
+            <button class="btn-ghost btn-sm" id="btnCopyCode">📋 Copy Code</button>
+            <button class="btn-ghost btn-sm" id="btnCopyLink">🔗 Copy Join Link</button>
+          </div>
+        </div>
+        <div class="room-qr" id="roomQrPanel" hidden>
+          <div class="room-qr-code" id="roomQrCode"></div>
+          <p class="room-qr-label">Scan to Join</p>
         </div>
       </div>
 
@@ -571,6 +627,8 @@ button.btn-block{ width:100%; }
         <div class="roster" id="playerRoster"></div>
       </div>
 
+      </div>
+      <div class="lobby-options">
       <div id="hostModeSection" style="display:none;">
         <p style="text-align:center;margin-bottom:6px;">Choose a mode</p>
         <div class="mode-grid" id="modeGrid"></div>
@@ -585,6 +643,8 @@ button.btn-block{ width:100%; }
         <button id="btnStartRound" class="btn-primary" disabled>Need 2+ Players</button>
       </div>
       <p id="lobbyStatusMessage" style="text-align:center;margin-top:10px;">Waiting for players to join...</p>
+      </div>
+      </div>
     </div>
 
     <!-- 3. WORD TARGET SETUP (HOST ONLY) -->
@@ -626,6 +686,7 @@ button.btn-block{ width:100%; }
       <p style="text-align:center;">Secretly write a word that rhymes with it. No one can see your answer until everyone locks in.</p>
 
       <div class="input-group">
+        <label class="visually-hidden" for="inputRhyme">Your rhyming word</label>
         <input type="password" id="inputRhyme" placeholder="Your rhyming word" autocomplete="off">
         <button type="button" id="btnToggleVisibility" class="toggle-visibility">Show</button>
       </div>
@@ -1248,6 +1309,28 @@ function joinUrl(code){
   url.searchParams.set('room', code);
   return url.toString();
 }
+function renderRoomQr(code){
+  const panel = document.getElementById('roomQrPanel');
+  const target = document.getElementById('roomQrCode');
+  if (!code || window.location.protocol === 'file:' || typeof qrcode !== 'function'){
+    panel.hidden = true;
+    target.innerHTML = '';
+    return;
+  }
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(joinUrl(code));
+    qr.make();
+    target.innerHTML = qr.createSvgTag({ cellSize:4, margin:16, scalable:true });
+    const svg = target.querySelector('svg');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'QR code for this room’s join link');
+    panel.hidden = false;
+  } catch(e){
+    panel.hidden = true;
+    target.innerHTML = '';
+  }
+}
 document.getElementById('btnCopyLink').addEventListener('click', async () => {
   if (window.location.protocol === 'file:'){ showModal('Publish to share a link', 'Open this game from an HTTPS website to share a join link across devices. For now, share the room code.'); return; }
   const link = joinUrl(document.getElementById('displayPeerId').textContent.trim());
@@ -1269,10 +1352,10 @@ function renderModeGrid(){
     const accent = MODE_COLORS[key];
     const selected = engine.mode === key;
     const ring = selected ? `box-shadow:0 0 0 3px ${hexToRgba(accent, .22)};` : '';
-    return `<div class="mode-card ${selected ? 'selected' : ''}" data-mode="${key}" style="border-left:5px solid ${accent};${ring}">
-      <div class="mode-card-title" style="${selected ? `color:${accent};` : ''}">${m.emoji} ${m.label}</div>
-      <p class="mode-card-desc">${m.desc}</p>
-    </div>`;
+    return `<button type="button" class="mode-card ${selected ? 'selected' : ''}" data-mode="${key}" aria-pressed="${selected}" style="border-left:5px solid ${accent};${ring}">
+      <span class="mode-card-title" style="${selected ? `color:${accent};` : ''}">${m.emoji} ${m.label}</span>
+      <span class="mode-card-desc">${m.desc}</span>
+    </button>`;
   }).join('');
   applyModeTheme(engine.mode);
   document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
@@ -1298,6 +1381,7 @@ document.getElementById('btnHostInit').addEventListener('click', () => {
     myPeerId = id;
     UIManager.showView('lobbyView');
     document.getElementById('displayPeerId').innerText = id;
+    renderRoomQr(id);
     document.getElementById('hostLobbyControls').style.display = "block";
     document.getElementById('hostModeSection').style.display = "block";
     document.getElementById('clientModeSection').style.display = "none";
@@ -1375,6 +1459,7 @@ document.getElementById('btnJoinInit').addEventListener('click', () => {
     myPeerId = id;
     UIManager.showView('lobbyView');
     document.getElementById('displayPeerId').innerText = targetId;
+    renderRoomQr(targetId);
     document.getElementById('hostModeSection').style.display = "none";
     document.getElementById('clientModeSection').style.display = "block";
     document.getElementById('lobbyStatusMessage').innerText = "Connecting to host...";
@@ -1392,6 +1477,7 @@ document.getElementById('btnJoinInit').addEventListener('click', () => {
       switch (data.type) {
         case 'ROOM_CODE':
           document.getElementById('displayPeerId').innerText = data.roomCode;
+          renderRoomQr(data.roomCode);
           break;
         case 'ROSTER_UPDATE': {
           lastKnownPlayers = data.players;

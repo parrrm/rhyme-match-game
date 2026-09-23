@@ -13,3 +13,5 @@ The recent target and rhyme-family history is stored in the host browser's local
 - The room link fills in the code on the join screen. Players still choose a nickname and press **Join Game**.
 - Connection status and the live count of submitted answers are visible.
 - After rounds 5, 10, 15, and so on, active players may predict which *other* player will match their own submitted rhyme most often over the next five rounds. A correct pick earns points equal to the number of active players when the prediction was made. A wrong pick loses half that amount, rounded up. Skipping changes no points. Tied top partners count as correct; if the player has no matches, a non-skipped pick is wrong. Predictions settle at the end of the five-round window or at game end.
+
+The lobby QR code is generated in the browser from the current room link; it does not send the link to a QR service. `qrcode.js` is qrcode-generator 2.0.4 (MIT license, attribution in the bundled file).
