@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 
 (async () => {
   const room = process.env.ROOM_ID;
-  if (!room || !/^[A-Za-z0-9_-]{4,80}$/.test(room)) throw new Error('ROOM_ID missing or invalid');
+  if (!room || !/^[A-Z2-9]{8}$/.test(room)) throw new Error('ROOM_ID missing or invalid');
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage();
   const errors = [];
@@ -20,15 +20,13 @@ const { chromium } = require('playwright');
       roster: document.querySelector('#playerRoster')?.textContent?.trim() || '',
       count: document.querySelector('#playerCount')?.textContent?.trim() || '',
       message: document.querySelector('#lobbyStatusMessage')?.textContent?.trim() || '',
-      peerId: typeof peer !== 'undefined' ? peer?.id : undefined,
-      signalDisconnected: typeof peer !== 'undefined' ? peer?.disconnected : undefined,
-      dataOpen: typeof hostConn !== 'undefined' ? hostConn?.open : undefined,
-      ice: typeof hostConn !== 'undefined' ? hostConn?.peerConnection?.iceConnectionState : undefined,
-      connection: typeof hostConn !== 'undefined' ? hostConn?.peerConnection?.connectionState : undefined,
+      roomId: typeof joinedRoomId !== 'undefined' ? joinedRoomId : '',
+      joined: typeof clientJoined !== 'undefined' ? clientJoined : false,
+      hostUid: typeof hostUid !== 'undefined' ? hostUid : '',
     }));
     const line = JSON.stringify(snapshot);
     if (line !== last) { console.log(`${Date.now() - start}ms ${line}`); last = line; }
-    if (snapshot.roster.includes('WAN QC') && snapshot.dataOpen) {
+    if (snapshot.roomId === room && snapshot.joined && snapshot.hostUid && snapshot.roster.includes('WAN QC')) {
       console.log('RESULT: joined canonical host roster');
       await browser.close();
       return;

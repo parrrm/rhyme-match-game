@@ -8,8 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="./peerjs.min.js"></script>
 <script src="./qrcode.js"></script>
+<script src="./connection-help.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
+<script src="./firebase-config.js"></script>
 <style>
 /* ============================================================
    TOKENS — "Arcade Grid": a neon gaming-lounge identity.
@@ -491,6 +495,11 @@ button.btn-block{ width:100%; }
  .connection-status.online{ color:var(--confetti); }
  .connection-status.pending{ color:var(--spotlight); }
  .connection-status.error{ color:var(--danger); }
+.connection-help{ margin:0 0 16px; padding:16px 18px; border:1px solid var(--spotlight); border-radius:var(--radius-md); background:var(--stage-2); }
+.connection-help[hidden]{ display:none; }
+.connection-help h2{ margin:0 0 8px; font-size:18px; }
+.connection-help ol{ margin:8px 0 12px; padding-left:22px; line-height:1.5; }
+.connection-help .btn-row{ justify-content:flex-start; }
  .ready-status{ text-align:center; font-weight:700; color:var(--spotlight); margin:12px 0 0; }
  .vote-choices{ display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin:18px 0; }
  .vote-choices button{ min-width:0; white-space:normal; overflow-wrap:anywhere; }
@@ -559,6 +568,11 @@ button.btn-block{ width:100%; }
     </div>
 
     <p class="connection-status" id="connectionStatus" role="status" aria-live="polite">● Not connected</p>
+    <section class="connection-help" id="connectionHelp" aria-labelledby="connectionHelpTitle" hidden>
+      <h2 id="connectionHelpTitle">Connection help</h2>
+      <ol id="connectionHelpSteps"></ol>
+      <div class="btn-row"><button class="btn-ghost btn-sm" id="btnRetryConnection" type="button">Retry connection</button></div>
+    </section>
 
   <div class="phase-tracker" id="phaseTracker" style="display:none;">
       <div class="phase-dot" data-phase="target"></div><div class="phase-track-line"></div>
@@ -1263,7 +1277,6 @@ class RhymeGameEngine {
    NETWORKING & APP STATE
    ============================================================ */
 const engine = new RhymeGameEngine();
-let peer = null;
 let isHost = false;
 let hostConn = null;
 let localName = "";
@@ -1279,7 +1292,38 @@ function setConnectionStatus(message, state){
   const el = document.getElementById('connectionStatus');
   el.textContent = '● ' + message;
   el.className = 'connection-status ' + (state || '');
+  if (state === 'online') document.getElementById('connectionHelp').hidden = true;
 }
+function showConnectionIssue(input){
+  const kind = ConnectionHelp.classify({ online:navigator.onLine, ...input });
+  const issue = ConnectionHelp.issues[kind];
+  document.getElementById('connectionHelpTitle').textContent = issue.title;
+  document.getElementById('connectionHelpSteps').innerHTML = issue.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('');
+  document.getElementById('connectionHelp').hidden = false;
+  document.getElementById('btnRetryConnection').disabled = kind === 'offline';
+}
+document.getElementById('btnRetryConnection').addEventListener('click', () => {
+  if (!navigator.onLine) { showConnectionIssue({ online:false }); return; }
+  document.getElementById('connectionHelp').hidden = true;
+  if (isHost){
+    if (roomRef) roomRef.child('meta').once('value').then(() => queuePersist()).catch(error => reportRoomError(error, 'service'));
+    else document.getElementById('btnHostInit').click();
+  } else if (roomRef && hostConn){
+    roomRef.child('snapshot').once('value').then(snap => {
+      clientNeedsSync = true;
+      if (clientJoined) syncClientSnapshot(snap.val());
+      else hostConn.send({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
+    }).catch(error => reportRoomError(error, 'service'));
+  } else document.getElementById('btnJoinInit').click();
+});
+window.addEventListener('offline', () => {
+  setConnectionStatus('This device is offline', 'error');
+  showConnectionIssue({ online:false });
+});
+window.addEventListener('online', () => {
+  setConnectionStatus('Internet is back — checking the room service', 'pending');
+  if (!roomRef) showConnectionIssue({ stage:'connection' });
+});
 function updateReadyStatus(ready, total){
   document.getElementById('readyStatus').textContent = `${ready} / ${total} players ready`;
 }
@@ -1342,6 +1386,7 @@ document.getElementById('btnCopyCode').addEventListener('click', async () => {
 /* --- Shareable room link, with a code fallback for browsers without clipboard access. --- */
 function joinUrl(code){
   const url = new URL(window.location.href);
+  url.searchParams.delete('host');
   url.searchParams.set('room', code);
   return url.toString();
 }
@@ -1405,245 +1450,274 @@ function renderModeGrid(){
   });
 }
 
-/* --- Host and guest transport: one signaling identity, one authoritative room. --- */
+/* --- Firebase rooms: hosted discovery, persisted state, and resumable clients. --- */
 const registeredConnections = new Set();
 const connectionHealth = new Map();
-const HEARTBEAT_MS = 5000;
-let heartbeatInterval = null;
 let hostSessionId = '';
 let hostStarting = false;
 let clientAttempt = 0;
 let clientJoined = false;
-let clientJoinTimer = null;
 let joinedRoomId = '';
 let joinedHostSessionId = '';
+let roomCode = '';
+let roomRef = null;
+let database = null;
+let auth = null;
+let roomUser = null;
+let hostUid = '';
+let hostOnline = false;
+let localConnectionId = '';
+let lastEventSeq = 0;
+let hostEventSeq = 0;
+let lastCommandSeq = 0;
+let persistTimer = null;
+let persistChain = Promise.resolve();
+let lastExpiryRenew = 0;
+let lastPublicSnapshot = null;
+let lastResultsPacket = null;
+let clientJoinTimer = null;
+let clientNeedsSync = false;
+const processedCommands = new Map();
+const subscriptions = [];
+const ROOM_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const incomingHost = new URL(window.location.href).searchParams.get('host');
+const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function randomSessionId(){
-  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  window.crypto.getRandomValues(bytes);
-  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+function roomRandomId(){
+  if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+  return Array.from(window.crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('');
 }
-function clientSessionFor(roomId){
-  const key = 'rhymeMatchClientSession:' + roomId;
+function makeRoomCode(){
+  const bytes = window.crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, b => ROOM_ALPHABET[b % ROOM_ALPHABET.length]).join('');
+}
+function validRoomCode(value){ return /^[A-Z2-9]{8}$/.test(value); }
+function localSessionId(code){
+  const key = 'rhymeMatchSession:' + code;
   try {
-    const saved = sessionStorage.getItem(key);
-    if (saved && /^[A-Za-z0-9-]{16,80}$/.test(saved)) return saved;
-    const created = randomSessionId();
-    sessionStorage.setItem(key, created);
-    return created;
-  } catch(e){ return randomSessionId(); }
+    let value = sessionStorage.getItem(key);
+    if (!value){ value = roomRandomId(); sessionStorage.setItem(key, value); }
+    return value;
+  } catch(e){ return roomRandomId(); }
 }
+function rememberName(name){ try { localStorage.setItem('rhymeMatchName', name); } catch(e){} }
 function hostPhase(){
-  const views = ['lobbyView','targetSetupView','voteView','submitRhymeView','spectatorView','judgingView','resultsView'];
-  return views.find(id => document.getElementById(id).classList.contains('active')) || 'lobbyView';
+  return ['lobbyView','targetSetupView','voteView','submitRhymeView','spectatorView','judgingView','resultsView']
+    .find(id => document.getElementById(id).classList.contains('active')) || 'lobbyView';
 }
-function sendHost(conn, payload){
-  if (!conn || !conn.open) return;
-  if (!registeredConnections.has(conn.peer) && payload.type !== 'ROOM_STATE' && payload.type !== 'ERROR') return;
-  conn.send({ ...payload, roomId: myPeerId, hostSessionId });
+function subscribe(ref, event, callback, cancel){ ref.on(event, callback, cancel); subscriptions.push(() => ref.off(event, callback)); }
+function clearSubscriptions(){ subscriptions.splice(0).forEach(off => off()); }
+function firebaseErrorCode(error){ return error && (error.code || error.message) || 'unknown'; }
+function reportRoomError(error, stage){
+  const code = firebaseErrorCode(error);
+  console.warn('Rhyme Match Firebase', { stage, code, roomCode, online:navigator.onLine });
+  const issue = ConnectionHelp.issues[ConnectionHelp.classify({ online:navigator.onLine, code, stage })];
+  setConnectionStatus(issue.title, 'error');
+  showConnectionIssue({ code, stage });
 }
-function logConnection(stage, error, conn){
-  console.warn('Rhyme Match connection', {
-    stage, type:error && error.type || 'unknown',
-    roomId: joinedRoomId || document.getElementById('inputJoinId').value.trim(),
-    signalDisconnected: !!(peer && peer.disconnected),
-    ice: conn && conn.peerConnection && conn.peerConnection.iceConnectionState || 'unavailable'
-  });
+async function ensureFirebase(){
+  if (typeof firebase === 'undefined' || !window.RHYME_FIREBASE_CONFIG){
+    throw { code:'auth/network-request-failed', message:'Firebase library did not load' };
+  }
+  if (!database){
+    firebase.initializeApp(window.RHYME_FIREBASE_CONFIG);
+    auth = firebase.auth();
+    database = firebase.database();
+  }
+  const credential = await auth.signInAnonymously();
+  roomUser = credential.user;
+  myPeerId = roomUser.uid;
+  return roomUser;
 }
-function connectionFailureText(error, stage){
-  const type = error && error.type;
-  if (type === 'peer-unavailable') return 'Host is not registered right now. Ask the host to check that the room is live and share its current link.';
-  if (stage === 'ack') return 'The host connection opened, but the room did not confirm your join. Try joining again.';
-  if (stage === 'identity') return 'Room identity did not match the link. Ask the host for a fresh join link.';
-  if (type === 'webrtc') return 'The host was found, but the browser connection could not open on these networks. This room has no relay for restrictive networks.';
-  if (stage === 'transport') return 'Could not open a connection to the host. The host may have left, or these networks may block the connection.';
-  if (stage === 'host-disconnect') return 'Connection to the host was lost. Rejoin with the same link to keep your score.';
-  if (type === 'room-full') return 'This room is full.';
-  if (type === 'invalid-session') return 'Your join session was invalid. Refresh this page and try again.';
-  if (type === 'network' || type === 'server-error' || type === 'socket-error' || type === 'socket-closed' || stage === 'signaling') return 'Could not reach the room signaling service. Check your connection and try again.';
-  if (type === 'browser-incompatible') return 'This browser cannot use WebRTC rooms. Try a current browser.';
-  return `Connection failed at ${stage}. Try joining again.`;
+function nextCommandSeq(){
+  const key = 'rhymeMatchCommandSeq:' + roomCode;
+  let previous = lastCommandSeq;
+  try { previous = Math.max(previous, Number(localStorage.getItem(key)) || 0); } catch(e){}
+  lastCommandSeq = Math.max(Date.now() * 1000, previous + 1);
+  try { localStorage.setItem(key, String(lastCommandSeq)); } catch(e){}
+  return lastCommandSeq;
 }
-function setJoinButtonBusy(busy){
+function setJoinBusy(busy){
   const button = document.getElementById('btnJoinInit');
   button.disabled = busy;
   button.textContent = busy ? 'Connecting…' : 'Join Game';
 }
-function clearJoinTimer(){ clearTimeout(clientJoinTimer); clientJoinTimer = null; }
-function armJoinTimer(attempt, stage, duration){
-  clearJoinTimer();
-  clientJoinTimer = setTimeout(() => {
-    if (attempt !== clientAttempt || clientJoined) return;
-    failClientAttempt(attempt, { type:stage === 'transport' ? 'webrtc' : 'network' }, stage);
-  }, duration);
-}
-function failClientAttempt(attempt, error, stage){
-  if (attempt !== clientAttempt) return;
-  logConnection(stage, error, hostConn);
-  const message = connectionFailureText(error, stage);
-  clientAttempt++;
-  clearJoinTimer();
-  clientJoined = false;
-  joinedRoomId = '';
-  joinedHostSessionId = '';
-  const oldConn = hostConn, oldPeer = peer;
-  hostConn = null; peer = null;
-  if (oldConn) try { oldConn.close(); } catch(e){}
-  if (oldPeer) try { oldPeer.destroy(); } catch(e){}
-  setJoinButtonBusy(false);
-  UIManager.showView('menuView');
-  document.getElementById('tabJoin').click();
-  setConnectionStatus(message, 'error');
-  showToast(message, 'error');
-}
-function showWaitingForNextRound(){
+function showWaitingForNextRound(message){
   UIManager.showView('waitingView');
-  document.getElementById('waitingRoomStatus').textContent = 'Connected to the same room; waiting for the next round.';
+  document.getElementById('waitingRoomStatus').textContent = message || 'Connected to the same room; waiting for the next round.';
 }
-function startHostHeartbeat(){
-  if (heartbeatInterval) return;
-  heartbeatInterval = setInterval(() => {
-    for (const id of [...registeredConnections]){
-      const health = connectionHealth.get(id);
-      const conn = connections.get(id);
-      if (!health || !conn || !conn.open){ markConnectionLost(id, 'closed'); continue; }
-      if (health.awaiting) health.missed++;
-      if (health.missed >= 3){ markConnectionLost(id, 'heartbeat-timeout'); continue; }
-      health.awaiting = true;
-      health.seq++;
-      sendHost(conn, { type:'PING', seq:health.seq });
-    }
-  }, HEARTBEAT_MS);
+function showRoomIdentity(code){
+  document.getElementById('displayPeerId').textContent = code;
+  renderRoomQr(code);
 }
-function markConnectionLost(id, reason){
-  const conn = connections.get(id);
-  if (!conn) return;
-  connections.delete(id);
-  registeredConnections.delete(id);
-  connectionHealth.delete(id);
-  try { conn.close(); } catch(e){}
-  const changed = engine.markDisconnected(id);
-  if (changed){
-    console.info('Rhyme Match player disconnected', { reason, playerId:id });
-    broadcastRoster();
-    if (document.getElementById('voteView').classList.contains('active')) broadcastVoteStatus();
-    if (document.getElementById('submitRhymeView').classList.contains('active')){
-      broadcastReadyStatus();
-      if (engine.allSubmitted()) openHostJudgingPhase();
+function roomUrl(code, isRoomHost){
+  const url = new URL(window.location.href);
+  url.searchParams.delete('room');
+  url.searchParams.delete('host');
+  url.searchParams.set(isRoomHost ? 'host' : 'room', code);
+  return url.toString();
+}
+async function setPresence(){
+  if (!roomRef || !database || !localConnectionId) return;
+  const root = isHost ? roomRef.child('hostConnections') : roomRef.child('presence').child(myPeerId);
+  const ref = root.child(localConnectionId);
+  await ref.onDisconnect().remove();
+  await ref.set({ at:firebase.database.ServerValue.TIMESTAMP });
+}
+function bindConnectionMonitor(){
+  let wasConnected = false;
+  subscribe(database.ref('.info/connected'), 'value', snap => {
+    const connected = snap.val() === true;
+    if (connected){
+      setPresence().catch(error => reportRoomError(error, 'presence'));
+      if (wasConnected === false && clientJoined && !isHost){
+        clientNeedsSync = true;
+        hostConn.send({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
+        if (lastPublicSnapshot) syncClientSnapshot(lastPublicSnapshot);
+      }
+      if (isHost || clientJoined) setConnectionStatus('Connected to room service', 'online');
+      wasConnected = true;
+    } else if (wasConnected){
+      setConnectionStatus(navigator.onLine ? 'Room service disconnected — reconnecting…' : 'This device is offline', 'error');
+      showConnectionIssue({ stage:navigator.onLine ? 'signaling' : 'connection' });
+      clientNeedsSync = true;
+      wasConnected = false;
     }
+  });
+}
+function serializeHostState(){
+  return {
+    round:engine.round, mode:engine.mode, targetWord:engine.targetWord,
+    players:[...engine.players.values()], submissions:[...engine.submissions],
+    predictions:[...engine.predictions], predictionCounts:[...engine.predictionCounts].map(([id, counts]) => [id,[...counts]]),
+    predictionRound:engine.predictionRound, predictionEndRound:engine.predictionEndRound,
+    predictionStake:engine.predictionStake, processedCommands:[...processedCommands],
+    phase:hostPhase(), results:lastResultsPacket, savedAt:Date.now()
+  };
+}
+function restoreHostState(state){
+  engine.round = state.round || 0;
+  engine.mode = state.mode || 'classic';
+  engine.targetWord = state.targetWord || '';
+  engine.players = new Map((state.players || []).map(p => [p.id, p]));
+  engine.submissions = new Map(state.submissions || []);
+  engine.predictions = new Map(state.predictions || []);
+  engine.predictionCounts = new Map((state.predictionCounts || []).map(([id, counts]) => [id,new Map(counts)]));
+  engine.predictionRound = state.predictionRound || 0;
+  engine.predictionEndRound = state.predictionEndRound || 0;
+  engine.predictionStake = state.predictionStake || 0;
+  processedCommands.clear();
+  (state.processedCommands || []).forEach(([id, seq]) => processedCommands.set(id, seq));
+  lastResultsPacket = state.results || null;
+  currentRound = Math.max(1, engine.round);
+  registeredConnections.clear();
+  connections.clear();
+  engine.players.forEach(player => {
+    if (player.id !== myPeerId && player.connected !== false){
+      registeredConnections.add(player.id);
+      connections.set(player.id, virtualConnection(player.id));
+    }
+  });
+}
+function queuePersist(){
+  if (!isHost || !roomRef) return;
+  if (Date.now() - lastExpiryRenew > 60 * 60 * 1000){
+    lastExpiryRenew = Date.now();
+    roomRef.child('meta/expiresAt').set(Date.now() + ROOM_LIFETIME_MS).catch(error => reportRoomError(error, 'save'));
   }
-  if (peer && !peer.disconnected) setConnectionStatus(registeredConnections.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    const state = serializeHostState();
+    const snapshot = {
+      roomId:roomCode, hostUid, hostSessionId, phase:state.phase,
+      round:state.round, mode:state.mode, targetWord:state.targetWord,
+      players:state.players, results:state.phase === 'resultsView' ? lastResultsPacket : null,
+      updatedAt:firebase.database.ServerValue.TIMESTAMP
+    };
+    persistChain = persistChain.then(() => Promise.all([
+      roomRef.child('hostState').set(state), roomRef.child('snapshot').set(snapshot)
+    ])).catch(error => reportRoomError(error, 'save'));
+  }, 0);
 }
-function registerHostJoin(conn, data){
-  const sessionId = typeof data.sessionId === 'string' && /^[A-Za-z0-9-]{16,80}$/.test(data.sessionId) ? data.sessionId : null;
-  if (!sessionId){ sendHost(conn, { type:'ERROR', code:'invalid-session', message:'Join session was invalid. Refresh and try again.' }); return; }
-  const name = String(data.name || '').trim().slice(0, 15) || 'Player';
-  let player = engine.players.get(conn.peer);
+function virtualConnection(uid){
+  return { peer:uid, open:true, send:payload => sendHost({ peer:uid, open:true }, payload) };
+}
+function sendHost(conn, payload){
+  if (!isHost || !roomRef || !conn || !conn.peer) return;
+  hostEventSeq = Math.max(Date.now() * 1000, hostEventSeq + 1);
+  const message = { ...payload, roomId:roomCode, hostId:hostUid, hostSessionId, seq:hostEventSeq };
+  roomRef.child('messages').child(conn.peer).set(message).catch(error => reportRoomError(error, 'send'));
+  queuePersist();
+}
+async function sendClient(payload){
+  if (!roomRef || !roomUser) throw { code:'room-not-found' };
+  const command = { ...payload, uid:myPeerId, seq:nextCommandSeq(), at:firebase.database.ServerValue.TIMESTAMP };
+  await roomRef.child('commands').child(myPeerId).set(command);
+}
+function markConnectionLost(uid, reason){
+  if (!registeredConnections.has(uid)) return;
+  registeredConnections.delete(uid);
+  connections.delete(uid);
+  const changed = engine.markDisconnected(uid);
+  if (!changed) return;
+  console.info('Rhyme Match player disconnected', { uid, reason });
+  broadcastRoster();
+  if (document.getElementById('voteView').classList.contains('active')) broadcastVoteStatus();
+  if (document.getElementById('submitRhymeView').classList.contains('active')){
+    broadcastReadyStatus();
+    if (engine.allSubmitted()) openHostJudgingPhase();
+  }
+  setConnectionStatus(registeredConnections.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
+}
+function registerHostJoin(uid, data){
+  if (!data.sessionId || !/^[A-Za-z0-9-]{16,80}$/.test(data.sessionId)){
+    sendHost(virtualConnection(uid), { type:'ERROR', code:'invalid-session' }); return;
+  }
+  let player = engine.players.get(uid);
   if (!player){
-    const previous = [...engine.players.values()].find(p => p.sessionId === sessionId && p.id !== myPeerId);
-    if (previous){
-      const oldId = previous.id;
-      const oldConn = connections.get(oldId);
-      connections.delete(oldId);
-      registeredConnections.delete(oldId);
-      connectionHealth.delete(oldId);
-      player = engine.rekeyPlayer(oldId, conn.peer, name);
-      if (oldConn) try { oldConn.close(); } catch(e){}
-    } else {
-      const connectedCount = [...engine.players.values()].filter(p => p.connected !== false).length;
-      if (connectedCount >= MAX_PLAYERS){ sendHost(conn, { type:'ERROR', code:'room-full', message:'This room is full.' }); return; }
-      engine.addPlayer(conn.peer, name);
-      player = engine.players.get(conn.peer);
-      player.sessionId = sessionId;
-    }
+    const connected = [...engine.players.values()].filter(p => p.connected !== false).length;
+    if (connected >= MAX_PLAYERS){ sendHost(virtualConnection(uid), { type:'ERROR', code:'room-full' }); return; }
+    engine.addPlayer(uid, String(data.name || 'Player').trim().slice(0,15) || 'Player');
+    player = engine.players.get(uid);
   }
   player.connected = true;
-  player.sessionId = sessionId;
+  player.sessionId = data.sessionId;
   player.pendingNextRound = !['lobbyView','targetSetupView'].includes(hostPhase());
-  registeredConnections.add(conn.peer);
-  connectionHealth.set(conn.peer, { awaiting:false, missed:0, seq:0 });
-  const players = [...engine.players.values()];
+  const conn = virtualConnection(uid);
+  registeredConnections.add(uid);
+  connections.set(uid, conn);
   sendHost(conn, {
-    type:'ROOM_STATE', hostId:myPeerId, playerId:conn.peer, clientSessionId:sessionId,
-    players, mode:engine.mode, round:engine.round, phase:hostPhase(), waiting:player.pendingNextRound
+    type:'ROOM_STATE', playerId:uid, clientSessionId:data.sessionId,
+    players:[...engine.players.values()], mode:engine.mode, round:engine.round,
+    phase:hostPhase(), waiting:player.pendingNextRound
   });
   broadcastRoster();
-  if (document.getElementById('submitRhymeView').classList.contains('active')) broadcastReadyStatus();
-  if (document.getElementById('voteView').classList.contains('active')) broadcastVoteStatus();
+  if (hostPhase() === 'submitRhymeView') broadcastReadyStatus();
+  if (hostPhase() === 'voteView') broadcastVoteStatus();
   setConnectionStatus('Room live — players connected', 'online');
 }
-
-/* --- HOST STARTUP --- */
-document.getElementById('btnHostInit').addEventListener('click', () => {
-  if (hostStarting || peer) return;
-  hostStarting = true;
-  document.getElementById('btnHostInit').disabled = true;
-  localName = getValidatedName();
-  isHost = true;
-  hostSessionId = randomSessionId();
-  setConnectionStatus('Opening room…', 'pending');
-  const hostPeer = new Peer();
-  peer = hostPeer;
-  let opened = false;
-
-  hostPeer.on('open', (id) => {
-    if (peer !== hostPeer) return;
-    if (opened && id !== myPeerId){
-      setConnectionStatus('Room identity changed; create a fresh room', 'error');
-      return;
-    }
-    if (!opened){
-      opened = true;
-      myPeerId = id;
-      UIManager.showView('lobbyView');
-      document.getElementById('displayPeerId').textContent = id;
-      renderRoomQr(id);
-      document.getElementById('hostLobbyControls').style.display = 'block';
-      document.getElementById('hostModeSection').style.display = 'block';
-      document.getElementById('clientModeSection').style.display = 'none';
-      engine.addPlayer(id, localName);
-      engine.players.get(id).sessionId = hostSessionId;
-      renderModeGrid();
-      broadcastRoster();
-      startHostHeartbeat();
-    }
-    setConnectionStatus(registeredConnections.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
-  });
-  hostPeer.on('disconnected', () => {
-    if (peer !== hostPeer) return;
-    setConnectionStatus('Room signaling offline — new players cannot join yet', 'error');
-    console.warn('Rhyme Match host signaling disconnected', { roomId:myPeerId });
-    if (!hostPeer.destroyed) try { hostPeer.reconnect(); } catch(e) { logConnection('host-reconnect', e); }
-  });
-  hostPeer.on('error', (error) => {
-    if (peer !== hostPeer) return;
-    logConnection('host-signaling', error);
-    setConnectionStatus(error.type === 'unavailable-id' ? 'Room code no longer registered — create a fresh room' : 'Room signaling failed — new players may not join', 'error');
-    if (!opened){ hostStarting = false; document.getElementById('btnHostInit').disabled = false; peer = null; try { hostPeer.destroy(); } catch(e){} }
-  });
-  hostPeer.on('connection', (conn) => {
-    if (peer !== hostPeer) { conn.close(); return; }
-    conn.on('open', () => { connections.set(conn.peer, conn); });
-    conn.on('data', (data) => {
-      if (!data || typeof data !== 'object') return;
-      if (data.type === 'JOIN') registerHostJoin(conn, data);
-      else if (!registeredConnections.has(conn.peer)) return;
-      else if (data.type === 'PONG'){
-        const health = connectionHealth.get(conn.peer);
-        if (health && data.seq === health.seq){ health.awaiting = false; health.missed = 0; }
-      } else if (data.type === 'PREDICT') registerPrediction(conn.peer, data.pick);
-      else if (data.type === 'SUBMIT_RHYME'){
-        engine.registerSubmission(conn.peer, data.word);
-        broadcastReadyStatus();
-        if (engine.allSubmitted()) openHostJudgingPhase();
-      }
-    });
-    conn.on('close', () => { if (connections.get(conn.peer) === conn) markConnectionLost(conn.peer, 'data-close'); });
-    conn.on('error', error => { logConnection('host-data', error, conn); if (connections.get(conn.peer) === conn) markConnectionLost(conn.peer, 'data-error'); });
-  });
-});
-
+function handleHostCommand(data){
+  if (!data || !data.uid || !Number.isSafeInteger(data.seq)) return;
+  const uid = data.uid;
+  if (data.seq <= (processedCommands.get(uid) || 0)) return;
+  processedCommands.set(uid, data.seq);
+  if (data.type === 'JOIN') registerHostJoin(uid, data);
+  else if (registeredConnections.has(uid) && data.type === 'PREDICT') registerPrediction(uid, data.pick);
+  else if (registeredConnections.has(uid) && data.type === 'SUBMIT_RHYME'){
+    engine.registerSubmission(uid, data.word || '');
+    broadcastReadyStatus();
+    if (engine.allSubmitted()) openHostJudgingPhase();
+  }
+  queuePersist();
+}
+function startHostSubscriptions(){
+  subscribe(roomRef.child('commands'), 'child_added', snap => handleHostCommand(snap.val()), error => reportRoomError(error, 'commands'));
+  subscribe(roomRef.child('commands'), 'child_changed', snap => handleHostCommand(snap.val()), error => reportRoomError(error, 'commands'));
+  subscribe(roomRef.child('presence'), 'value', snap => {
+    const all = snap.val() || {};
+    for (const uid of [...registeredConnections]) if (!all[uid] || !Object.keys(all[uid]).length) markConnectionLost(uid, 'presence-lost');
+  }, error => reportRoomError(error, 'presence'));
+}
 function broadcastRoster(){
   const list = [...engine.players.values()];
   lastKnownPlayers = list;
@@ -1652,148 +1726,254 @@ function broadcastRoster(){
   document.getElementById('clientModeLabel').textContent = MODES[engine.mode].emoji + ' ' + MODES[engine.mode].label;
   document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
   applyModeTheme(engine.mode);
-  if (isHost && document.getElementById('lobbyView').classList.contains('active')){
-    UIManager.updateHeader(currentRound, me ? me.score : 0, engine.mode, me ? me.eliminated : false);
-  }
+  if (isHost && document.getElementById('lobbyView').classList.contains('active')) UIManager.updateHeader(currentRound, me ? me.score : 0, engine.mode, me ? me.eliminated : false);
   connections.forEach(c => sendHost(c, { type:'ROSTER_UPDATE', players:list, mode:engine.mode }));
+  queuePersist();
 }
+function resumeHostView(state){
+  document.getElementById('hostLobbyControls').style.display = 'block';
+  document.getElementById('hostModeSection').style.display = 'block';
+  document.getElementById('clientModeSection').style.display = 'none';
+  renderModeGrid();
+  broadcastRoster();
+  if (state.phase === 'resultsView' && lastResultsPacket){
+    const p = lastResultsPacket;
+    displayResults(p.results, p.players, p.eliminatedNames, p.gameOver, p.winnerName);
+  } else if (state.phase === 'judgingView' || state.phase === 'submitRhymeView' || state.phase === 'spectatorView'){
+    openHostJudgingPhase();
+  } else if (state.phase === 'voteView'){
+    showVote([...engine.players.values()], engine.predictionRound);
+    broadcastVoteStatus();
+  } else if (state.phase === 'targetSetupView') UIManager.showView('targetSetupView');
+  else UIManager.showView('lobbyView');
+  queuePersist();
+}
+async function startHost(){
+  if (hostStarting || roomRef) return;
+  hostStarting = true;
+  document.getElementById('btnHostInit').disabled = true;
+  setConnectionStatus('Opening Firebase room…', 'pending');
+  try {
+    await ensureFirebase();
+    isHost = true;
+    localName = getValidatedName();
+    rememberName(localName);
+    hostUid = myPeerId;
+    localConnectionId = roomRandomId();
+    if (incomingHost && validRoomCode(incomingHost.toUpperCase())){
+      roomCode = incomingHost.toUpperCase();
+      roomRef = database.ref('rooms/' + roomCode);
+      const [metaSnap, stateSnap] = await Promise.all([roomRef.child('meta').once('value'), roomRef.child('hostState').once('value')]);
+      const meta = metaSnap.val();
+      if (!meta || meta.hostUid !== myPeerId) throw { code:'permission-denied' };
+      hostSessionId = meta.hostSessionId;
+      restoreHostState(stateSnap.val() || {});
+      if (!engine.players.has(myPeerId)) engine.addPlayer(myPeerId, localName);
+      else engine.players.get(myPeerId).connected = true;
+      showRoomIdentity(roomCode);
+      resumeHostView(stateSnap.val() || {});
+    } else {
+      roomCode = makeRoomCode();
+      roomRef = database.ref('rooms/' + roomCode);
+      const existing = await roomRef.child('meta').once('value');
+      if (existing.exists()) throw { code:'room-code-collision' };
+      hostSessionId = roomRandomId();
+      engine.addPlayer(myPeerId, localName);
+      engine.players.get(myPeerId).sessionId = hostSessionId;
+      await roomRef.set({
+        meta:{ hostUid:myPeerId, hostSessionId, createdAt:firebase.database.ServerValue.TIMESTAMP, expiresAt:Date.now()+ROOM_LIFETIME_MS },
+        snapshot:{ roomId:roomCode, hostUid:myPeerId, hostSessionId, phase:'lobbyView', round:0, mode:engine.mode, players:[...engine.players.values()] },
+        hostState:serializeHostState()
+      });
+      history.replaceState(null, '', roomUrl(roomCode, true));
+      showRoomIdentity(roomCode);
+      document.getElementById('hostLobbyControls').style.display = 'block';
+      document.getElementById('hostModeSection').style.display = 'block';
+      document.getElementById('clientModeSection').style.display = 'none';
+      UIManager.showView('lobbyView');
+      renderModeGrid();
+      broadcastRoster();
+    }
+    bindConnectionMonitor();
+    startHostSubscriptions();
+    setConnectionStatus(registeredConnections.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
+  } catch(error){
+    reportRoomError(error, 'host-start');
+    roomRef = null;
+    hostStarting = false;
+    document.getElementById('btnHostInit').disabled = false;
+  }
+}
+document.getElementById('btnHostInit').addEventListener('click', startHost);
 
-/* --- CLIENT STARTUP --- */
-document.getElementById('btnJoinInit').addEventListener('click', () => {
-  if (peer || document.getElementById('btnJoinInit').disabled) return;
-  const targetId = document.getElementById('inputJoinId').value.trim();
-  if (!targetId || !/^[A-Za-z0-9_-]{4,80}$/.test(targetId)){
-    shakeInput(document.getElementById('inputJoinId'));
-    showToast('Enter the room code from the host’s current link.', 'error');
+function syncClientSnapshot(snapshot){
+  if (!snapshot || snapshot.roomId !== roomCode || snapshot.hostUid !== hostUid || snapshot.hostSessionId !== joinedHostSessionId) return;
+  lastPublicSnapshot = snapshot;
+  lastKnownPlayers = snapshot.players || [];
+  engine.mode = snapshot.mode || 'classic';
+  currentRound = Math.max(1, snapshot.round || 1);
+  UIManager.updateRoster(lastKnownPlayers);
+  const me = lastKnownPlayers.find(p => p.id === myPeerId);
+  if (me){ localScore = me.score; UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated); }
+  if (!clientNeedsSync) return;
+  clientNeedsSync = false;
+  if (snapshot.phase === 'lobbyView') UIManager.showView('lobbyView');
+  else if (snapshot.phase === 'resultsView' && snapshot.results){
+    const p = snapshot.results;
+    displayResults(p.results, p.players, p.eliminatedNames, p.gameOver, p.winnerName);
+  } else showWaitingForNextRound('Reconnected to the same room; you can play from the next round.');
+}
+function handleClientMessage(data, attempt){
+  if (attempt !== clientAttempt || !data || data.roomId !== roomCode || data.hostId !== hostUid) return;
+  if (data.seq <= lastEventSeq) return;
+  lastEventSeq = data.seq;
+  if (data.type === 'ERROR'){
+    reportRoomError({ code:data.code }, 'host');
+    setJoinBusy(false);
     return;
   }
-  const sessionId = clientSessionFor(targetId);
-  const attempt = ++clientAttempt;
-  localName = getValidatedName();
-  isHost = false;
-  clientJoined = false;
-  setJoinButtonBusy(true);
-  setConnectionStatus('Contacting room signaling…', 'pending');
-  const clientPeer = new Peer();
-  peer = clientPeer;
-  armJoinTimer(attempt, 'signaling', 12000);
-
-  clientPeer.on('open', (id) => {
-    if (attempt !== clientAttempt) return;
-    myPeerId = id;
-    setConnectionStatus('Finding host and opening connection…', 'pending');
-    const conn = clientPeer.connect(targetId, { reliable:true });
-    hostConn = conn;
-    armJoinTimer(attempt, 'transport', 15000);
-    conn.on('open', () => {
-      if (attempt !== clientAttempt) return;
-      setConnectionStatus('Host connected — joining room…', 'pending');
-      armJoinTimer(attempt, 'ack', 7000);
-      conn.send({ type:'JOIN', name:localName, sessionId });
-    });
-    conn.on('data', data => {
-      if (attempt !== clientAttempt || !data || typeof data !== 'object') return;
-      if (data.type === 'ROOM_STATE'){
-        if (data.roomId !== targetId || data.hostId !== targetId || data.playerId !== myPeerId || data.clientSessionId !== sessionId || !Array.isArray(data.players) || !data.players.some(p => p.id === myPeerId)){
-          failClientAttempt(attempt, { type:'identity-mismatch' }, 'identity'); return;
-        }
-        clearJoinTimer();
-        clientJoined = true;
-        joinedRoomId = targetId;
-        joinedHostSessionId = data.hostSessionId;
-        lastKnownPlayers = data.players;
-        engine.mode = data.mode || 'classic';
-        currentRound = data.round || 1;
-        document.getElementById('displayPeerId').textContent = targetId;
-        renderRoomQr(targetId);
-        document.getElementById('hostModeSection').style.display = 'none';
-        document.getElementById('clientModeSection').style.display = 'block';
-        UIManager.updateRoster(data.players);
-        const me = data.players.find(p => p.id === myPeerId);
-        localScore = me.score;
-        UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated);
-        if (data.waiting) showWaitingForNextRound();
-        else UIManager.showView('lobbyView');
-        document.getElementById('lobbyStatusMessage').textContent = data.waiting ? 'Waiting for the next round…' : 'Connected! Waiting for the host…';
-        setConnectionStatus('Connected to verified room', 'online');
-        Sound.lock();
-        return;
-      }
-      if (data.type === 'ERROR'){
-        failClientAttempt(attempt, { type:data.code || 'host-error' }, 'host');
-        return;
-      }
-      if (!clientJoined || data.roomId !== joinedRoomId || data.hostSessionId !== joinedHostSessionId) return;
-      if (data.type === 'PING'){ conn.send({ type:'PONG', seq:data.seq }); return; }
-      switch (data.type){
-        case 'ROSTER_UPDATE': {
-          lastKnownPlayers = data.players;
-          engine.mode = data.mode || 'classic';
-          document.getElementById('clientModeLabel').textContent = MODES[engine.mode].emoji + ' ' + MODES[engine.mode].label;
-          document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
-          applyModeTheme(engine.mode);
-          UIManager.updateRoster(data.players);
-          const me = data.players.find(p => p.id === myPeerId);
-          if (me){ localScore = me.score; UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated); }
-          break;
-        }
-        case 'START_RHYME_PHASE': {
-          currentRound = data.round;
-          currentTimerSeconds = data.timerSeconds;
-          engine.mode = data.mode;
-          const me = lastKnownPlayers.find(p => p.id === myPeerId);
-          if (me && me.pendingNextRound){ showWaitingForNextRound(); break; }
-          setConnectionStatus('Connected — round in progress', 'online');
-          if (me && me.eliminated) startSpectating(data.targetWord);
-          else startRhymeEntry(data.targetWord);
-          break;
-        }
-        case 'VOTE_START': {
-          const me = data.players.find(p => p.id === myPeerId);
-          if (me && me.pendingNextRound){ showWaitingForNextRound(); break; }
-          setConnectionStatus('Connected — making predictions', 'online');
-          showVote(data.players, data.round);
-          break;
-        }
-        case 'VOTE_STATUS': document.getElementById('voteStatus').textContent = `${data.ready} / ${data.total} predictions in`; break;
-        case 'READY_STATUS': updateReadyStatus(data.ready, data.total); break;
-        case 'JUDGING_PHASE':
-          if (!document.getElementById('waitingView').classList.contains('active')) openClientJudgingPhase(data.targetWord, data.submissions);
-          break;
-        case 'ROUND_OVER':
-          setConnectionStatus('Connected to room', 'online');
-          if (!document.getElementById('waitingView').classList.contains('active')) displayResults(data.results, data.players, data.eliminatedNames, data.gameOver, data.winnerName);
-          else { lastKnownPlayers = data.players; UIManager.updateRoster(data.players); }
-          break;
-        case 'LOBBY_RETURN':
-          currentRound = 1; localScore = 0;
-          UIManager.updateHeader(1, 0, engine.mode, false);
-          UIManager.showView('lobbyView');
-          setConnectionStatus('Connected to room', 'online');
-          break;
-      }
-    });
-    conn.on('close', () => {
-      if (attempt !== clientAttempt) return;
-      failClientAttempt(attempt, { type:'data-closed' }, clientJoined ? 'host-disconnect' : 'transport');
-    });
-    conn.on('error', error => { if (attempt === clientAttempt) failClientAttempt(attempt, error, 'transport'); });
-  });
-  clientPeer.on('disconnected', () => {
-    if (attempt !== clientAttempt) return;
-    setConnectionStatus(clientJoined && hostConn && hostConn.open ? 'Room connected; signaling temporarily offline' : 'Room signaling disconnected', 'pending');
-    if (!clientPeer.destroyed) try { clientPeer.reconnect(); } catch(e) { logConnection('client-reconnect', e, hostConn); }
-  });
-  clientPeer.on('error', error => {
-    if (attempt !== clientAttempt) return;
-    if (clientJoined && hostConn && hostConn.open && error.type === 'network'){
-      logConnection('client-signaling', error, hostConn);
-      setConnectionStatus('Room connected; signaling temporarily offline', 'pending');
-      return;
+  if (data.type === 'ROOM_STATE'){
+    if (data.playerId !== myPeerId || data.clientSessionId !== localSessionId(roomCode) || data.hostSessionId !== joinedHostSessionId || !Array.isArray(data.players) || !data.players.some(p => p.id === myPeerId)){
+      reportRoomError({ code:'identity-mismatch' }, 'identity'); return;
     }
-    failClientAttempt(attempt, error, 'signaling');
-  });
-});
+    clearTimeout(clientJoinTimer);
+    clientJoined = true;
+    joinedRoomId = roomCode;
+    setJoinBusy(false);
+    lastKnownPlayers = data.players;
+    engine.mode = data.mode || 'classic';
+    currentRound = Math.max(1, data.round || 1);
+    document.getElementById('hostModeSection').style.display = 'none';
+    document.getElementById('clientModeSection').style.display = 'block';
+    UIManager.updateRoster(data.players);
+    const me = data.players.find(p => p.id === myPeerId);
+    localScore = me.score;
+    UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated);
+    if (data.waiting) showWaitingForNextRound();
+    else UIManager.showView('lobbyView');
+    setConnectionStatus('Connected to verified room', 'online');
+    Sound.lock();
+    return;
+  }
+  if (!clientJoined || data.hostSessionId !== joinedHostSessionId) return;
+  switch (data.type){
+    case 'ROSTER_UPDATE': {
+      lastKnownPlayers = data.players;
+      engine.mode = data.mode || 'classic';
+      document.getElementById('clientModeLabel').textContent = MODES[engine.mode].emoji + ' ' + MODES[engine.mode].label;
+      document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
+      applyModeTheme(engine.mode);
+      UIManager.updateRoster(data.players);
+      const me = data.players.find(p => p.id === myPeerId);
+      if (me){ localScore = me.score; UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated); }
+      break;
+    }
+    case 'START_RHYME_PHASE': {
+      currentRound = data.round;
+      currentTimerSeconds = data.timerSeconds;
+      engine.mode = data.mode;
+      const me = lastKnownPlayers.find(p => p.id === myPeerId);
+      if (me && me.pendingNextRound){ showWaitingForNextRound(); break; }
+      setConnectionStatus('Connected — round in progress', 'online');
+      if (me && me.eliminated) startSpectating(data.targetWord);
+      else startRhymeEntry(data.targetWord);
+      break;
+    }
+    case 'VOTE_START': {
+      const me = data.players.find(p => p.id === myPeerId);
+      if (me && me.pendingNextRound){ showWaitingForNextRound(); break; }
+      showVote(data.players, data.round);
+      break;
+    }
+    case 'VOTE_STATUS': document.getElementById('voteStatus').textContent = `${data.ready} / ${data.total} predictions in`; break;
+    case 'READY_STATUS': updateReadyStatus(data.ready, data.total); break;
+    case 'JUDGING_PHASE':
+      if (!document.getElementById('waitingView').classList.contains('active')) openClientJudgingPhase(data.targetWord, data.submissions);
+      break;
+    case 'ROUND_OVER':
+      if (!document.getElementById('waitingView').classList.contains('active')) displayResults(data.results, data.players, data.eliminatedNames, data.gameOver, data.winnerName);
+      else { lastKnownPlayers = data.players; UIManager.updateRoster(data.players); }
+      break;
+    case 'LOBBY_RETURN':
+      currentRound = 1; localScore = 0;
+      UIManager.updateHeader(1, 0, engine.mode, false);
+      UIManager.showView('lobbyView');
+      break;
+  }
+}
+async function startClient(){
+  if (document.getElementById('btnJoinInit').disabled || roomRef) return;
+  const target = document.getElementById('inputJoinId').value.trim().toUpperCase();
+  if (!validRoomCode(target)){
+    shakeInput(document.getElementById('inputJoinId'));
+    showToast('Enter the 8-character code from the host’s current link.', 'error'); return;
+  }
+  const attempt = ++clientAttempt;
+  setJoinBusy(true);
+  setConnectionStatus('Looking up room in Firebase…', 'pending');
+  try {
+    await ensureFirebase();
+    isHost = false;
+    localName = getValidatedName();
+    rememberName(localName);
+    roomCode = target;
+    roomRef = database.ref('rooms/' + roomCode);
+    const metaSnap = await roomRef.child('meta').once('value');
+    const meta = metaSnap.val();
+    if (!meta || meta.expiresAt < Date.now()) throw { code:'room-not-found' };
+    if (meta.hostUid === myPeerId) throw { code:'same-browser-host' };
+    hostUid = meta.hostUid;
+    joinedHostSessionId = meta.hostSessionId;
+    localConnectionId = roomRandomId();
+    showRoomIdentity(roomCode);
+    const existingMessage = await roomRef.child('messages').child(myPeerId).once('value');
+    lastEventSeq = existingMessage.val()?.seq || 0;
+    hostConn = { open:true, send:payload => sendClient(payload).catch(error => reportRoomError(error, 'send')) };
+    subscribe(roomRef.child('messages').child(myPeerId), 'value', snap => handleClientMessage(snap.val(), attempt), error => reportRoomError(error, 'messages'));
+    subscribe(roomRef.child('snapshot'), 'value', snap => {
+      lastPublicSnapshot = snap.val();
+      if (clientJoined) syncClientSnapshot(lastPublicSnapshot);
+    }, error => reportRoomError(error, 'snapshot'));
+    subscribe(roomRef.child('hostConnections'), 'value', snap => {
+      hostOnline = snap.exists();
+      if (!hostOnline && clientJoined){
+        setConnectionStatus('Host temporarily away — room saved', 'pending');
+        showConnectionIssue({ hostOnline:false });
+      } else if (hostOnline && clientJoined) setConnectionStatus('Connected to room', 'online');
+    });
+    bindConnectionMonitor();
+    await setPresence();
+    await sendClient({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
+    clientJoinTimer = setTimeout(() => {
+      if (clientJoined || attempt !== clientAttempt) return;
+      setJoinBusy(false);
+      if (!hostOnline){
+        showWaitingForNextRound('The room is saved. Waiting for the host to reconnect.');
+        setConnectionStatus('Host temporarily away — room saved', 'pending');
+        showConnectionIssue({ hostOnline:false });
+      } else reportRoomError({ code:'sync-timeout' }, 'ack');
+    }, 10000);
+  } catch(error){
+    if (attempt !== clientAttempt) return;
+    clearSubscriptions();
+    roomRef = null;
+    hostConn = null;
+    setJoinBusy(false);
+    reportRoomError(error, 'lookup');
+  }
+}
+document.getElementById('btnJoinInit').addEventListener('click', startClient);
+
+try {
+  const remembered = localStorage.getItem('rhymeMatchName');
+  if (remembered) document.getElementById('inputPlayerName').value = remembered;
+} catch(e){}
+if (incomingHost && validRoomCode(incomingHost.toUpperCase())){
+  document.getElementById('btnHostInit').textContent = 'Resume Room';
+  setTimeout(() => document.getElementById('btnHostInit').click(), 0);
+} else if (incomingRoom && validRoomCode(incomingRoom.toUpperCase()) && document.getElementById('inputPlayerName').value){
+  setTimeout(() => document.getElementById('btnJoinInit').click(), 0);
+}
 
 /* --- Optional prediction before rounds 6, 11, ... --- */
 function showVote(players, round){
@@ -1905,6 +2085,7 @@ function updatePredictionResults(results){
 /* --- TARGET SETUP (HOST) --- */
 document.getElementById('btnStartRound').addEventListener('click', () => {
   UIManager.showView('targetSetupView');
+  queuePersist();
   document.getElementById('inputCustomTarget').value = '';
   document.getElementById('wordSlotDisplay').textContent = 'Tap "Random Word" to draw one';
   document.getElementById('wordSlotDisplay').classList.remove('spinning');
@@ -2109,6 +2290,7 @@ document.getElementById('btnFinalizeScores').addEventListener('click', () => {
   const elim = engine.applyElimination();
   if (elim.gameOver && engine.predictionRound) { settlePredictionResults(results); delete results.voteProgress; }
   const playersSnapshot = Array.from(engine.players.values());
+  lastResultsPacket = { results, players:playersSnapshot, eliminatedNames:elim.eliminatedNames, gameOver:elim.gameOver, winnerName:elim.winnerName };
 
   Sound.reveal();
   displayResults(results, playersSnapshot, elim.eliminatedNames, elim.gameOver, elim.winnerName);

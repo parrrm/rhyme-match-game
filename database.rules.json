@@ -1,0 +1,49 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$room": {
+        ".write": "auth != null && !data.exists() && newData.hasChildren(['meta', 'snapshot', 'hostState']) && newData.child('meta/hostUid').val() === auth.uid",
+        "meta": {
+          ".read": "auth != null",
+          ".write": "auth != null && data.child('hostUid').val() === auth.uid"
+        },
+        "snapshot": {
+          ".read": "auth != null",
+          ".write": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid"
+        },
+        "hostState": {
+          ".read": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid",
+          ".write": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid"
+        },
+        "hostConnections": {
+          ".read": "auth != null",
+          "$connection": {
+            ".write": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid"
+          }
+        },
+        "presence": {
+          ".read": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid",
+          "$uid": {
+            "$connection": {
+              ".write": "auth != null && auth.uid === $uid"
+            }
+          }
+        },
+        "commands": {
+          ".read": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid",
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.child('uid').val() === auth.uid && newData.child('seq').isNumber() && (!data.exists() || newData.child('seq').val() > data.child('seq').val())"
+          }
+        },
+        "messages": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid"
+          }
+        }
+      }
+    }
+  }
+}
