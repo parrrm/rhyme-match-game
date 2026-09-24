@@ -44,7 +44,9 @@
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-html{ scroll-padding-top: env(safe-area-inset-top, 0px); }
+html{ scroll-padding-top: env(safe-area-inset-top, 0px); color-scheme:dark; }
+.skip-link{ position:absolute; left:12px; top:-80px; z-index:110; padding:12px 16px; border-radius:10px; background:var(--spotlight); color:var(--ink); font-weight:800; }
+.skip-link:focus{ top:12px; }
 *, *::before, *::after{ box-sizing:inherit; }
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
@@ -183,6 +185,9 @@ button.btn-danger{ background:var(--danger); color:#330606; box-shadow:0 4px 0 #
 button.btn-danger:active{ box-shadow:0 1px 0 #9c1f1f; }
 button.btn-sm{ padding:8px 14px; font-size:13px; box-shadow:none; }
 button.btn-block{ width:100%; }
+button, .tab-btn{ min-height:48px; touch-action:manipulation; -webkit-tap-highlight-color:rgba(41,226,255,.2); }
+button.btn-sm{ min-height:48px; }
+button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(--spotlight); outline-offset:3px; }
 .btn-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
 
 .divider{ height:1px; background:var(--line); margin:20px 0; border:none; }
@@ -191,7 +196,7 @@ button.btn-block{ width:100%; }
    PHASE TRACKER — genuinely sequential, so dots are earned here
    ============================================================ */
 .phase-tracker{ display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:18px; }
-.phase-dot{ width:8px; height:8px; border-radius:50%; background:var(--line); transition:all .25s ease; }
+.phase-dot{ width:8px; height:8px; border-radius:50%; background:var(--line); transition:width .25s ease, background .25s ease, box-shadow .25s ease; }
 .phase-track-line{ width:20px; height:2px; background:var(--line); }
 .phase-dot.done{ background:var(--confetti); }
 .phase-dot.current{ background:var(--spotlight); width:22px; border-radius:6px; box-shadow:0 0 0 4px rgba(41,226,255,.22); }
@@ -225,7 +230,13 @@ button.btn-block{ width:100%; }
    ============================================================ */
 .tab-row{ display:flex; gap:8px; background:var(--stage-2); padding:5px; border-radius:14px; margin-bottom:18px; }
 .tab-btn{ flex:1; background:transparent; box-shadow:none; color:var(--muted); padding:10px; border-radius:10px; }
-.tab-btn.active{ background:var(--stage); color:var(--paper); }
+.tab-btn.active{ background:var(--stage); color:var(--paper); box-shadow:inset 0 0 0 2px var(--spotlight),0 0 14px rgba(41,226,255,.13); }
+.tab-btn:not(.active):hover{ background:#283356; color:var(--paper); }
+.menu-form .btn-primary{ font-size:17px; min-height:54px; margin-top:4px; }
+.field-feedback{ min-height:20px; margin:5px 0 0; font-size:12px; color:var(--muted); text-align:left; }
+.field-feedback.error{ color:#ff9a9a; }
+.field-feedback.ok{ color:var(--confetti); }
+#inputJoinId{ text-transform:uppercase; }
 .menu-panel{ display:none; }
 .menu-panel.active{ display:block; animation:viewIn .25s ease; }
 
@@ -242,12 +253,14 @@ button.btn-block{ width:100%; }
 }
 .room-code-value{
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:clamp(15px,1.45vw,19px);
+  font-size:clamp(27px,3.2vw,40px);
   font-weight:700;
   color:var(--spotlight);
   overflow-wrap:anywhere;
-  letter-spacing:.1px;
+  letter-spacing:.12em;
 }
+.room-code-value button{ color:inherit; background:transparent; border:0; padding:0; min-height:48px; box-shadow:none; font:inherit; letter-spacing:inherit; border-radius:4px; }
+.room-code-value button:hover{ text-decoration:underline; }
 .copy-row{ display:flex; gap:8px; justify-content:flex-start; align-items:center; margin-top:16px; flex-wrap:wrap; }
 .room-qr{ display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
 .room-qr[hidden]{ display:none; }
@@ -256,7 +269,7 @@ button.btn-block{ width:100%; }
 .room-qr-label{ margin:0; font-size:13px; font-weight:700; color:var(--paper); }
 .room-share-label{ font-weight:800; color:var(--paper); font-size:16px; margin-bottom:8px; }
 .room-share-hint{ font-size:14px; margin-top:8px; }
-@media (max-width:650px){ .room-code-card{ grid-template-columns:1fr; } .room-qr{ grid-row:1; } .room-qr-code{ width:172px; height:172px; } .copy-row{ justify-content:center; } .room-share-info{ text-align:center; } }
+@media (max-width:650px){ .room-code-card{ grid-template-columns:1fr; } .room-qr-code{ width:172px; height:172px; } .copy-row{ justify-content:center; } .room-share-info{ text-align:center; } }
 
 .roster{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:10px 0; }
 .player-chip{
@@ -272,6 +285,7 @@ button.btn-block{ width:100%; }
 }
 .player-chip.you{ border-color:var(--spotlight); box-shadow:0 0 0 2px rgba(41,226,255,.25); }
 .player-chip .avatar{ font-size:15px; }
+.player-chip.waiting-slot{ border-style:dashed; color:var(--muted); background:transparent; }
 .avatar-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:middle; flex-shrink:0; }
 
 .mode-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
@@ -388,6 +402,8 @@ button.btn-block{ width:100%; }
 .result-row:nth-child(5){ animation-delay:.27s; } .result-row:nth-child(n+6){ animation-delay:.32s; }
 @keyframes rowIn{ from{ opacity:0; transform:translateX(-8px); } to{ opacity:1; transform:translateX(0); } }
 .result-row.positive{ border-left-color:var(--confetti); }
+.result-row.big-match{ border-color:var(--confetti); box-shadow:0 0 0 1px rgba(182,255,60,.24),0 10px 28px rgba(0,0,0,.18); }
+.result-kicker{ display:inline-block; margin-left:6px; color:var(--confetti); font-size:12px; font-weight:800; }
 .result-row.negative{ border-left-color:var(--danger); }
 .result-row.neutral{ border-left-color:var(--line); }
 .result-row.out{ opacity:.5; }
@@ -491,10 +507,11 @@ button.btn-block{ width:100%; }
   padding:22px; max-width:340px; width:100%; text-align:center; box-shadow:var(--shadow);
 }
 
- .connection-status{ text-align:center; font-size:14px; font-weight:700; margin:-8px 0 14px; color:var(--muted); }
- .connection-status.online{ color:var(--confetti); }
- .connection-status.pending{ color:var(--spotlight); }
- .connection-status.error{ color:var(--danger); }
+.connection-status{ display:flex; align-items:center; gap:10px; width:fit-content; max-width:100%; min-height:44px; margin:0 auto 18px; padding:9px 16px; text-align:left; font-size:14px; line-height:1.3; font-weight:800; border:1px solid var(--line); border-radius:999px; background:var(--stage-2); color:var(--muted); overflow-wrap:anywhere; }
+.connection-status::before{ content:''; width:10px; height:10px; flex:none; border-radius:50%; background:currentColor; box-shadow:0 0 0 4px rgba(255,255,255,.1); }
+.connection-status.online{ color:var(--confetti); border-color:rgba(182,255,60,.44); }
+.connection-status.pending{ color:var(--spotlight); border-color:rgba(41,226,255,.44); }
+.connection-status.error{ color:#ff9a9a; border-color:var(--danger); background:#3a1c2c; }
 .connection-help{ margin:0 0 16px; padding:16px 18px; border:1px solid var(--spotlight); border-radius:var(--radius-md); background:var(--stage-2); }
 .connection-help[hidden]{ display:none; }
 .connection-help h2{ margin:0 0 8px; font-size:18px; }
@@ -513,13 +530,23 @@ button.btn-block{ width:100%; }
   .lobby-layout{ display:grid; grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr); gap:24px; align-items:start; }
   .lobby-options{ background:rgba(28,37,68,.48); border:1px solid var(--line); border-radius:var(--radius-lg); padding:22px; }
 }
-.menu-intro{ display:none; }
+.menu-intro{ display:block; }
 .menu-intro h2{ font-size:clamp(32px,3.3vw,48px); line-height:1.1; margin-bottom:18px; }
 .menu-intro p{ font-size:18px; max-width:34ch; }
 .menu-steps{ display:grid; gap:12px; margin-top:24px; }
 .menu-step{ display:flex; gap:14px; align-items:center; font-size:16px; font-weight:700; }
 .menu-step span{ display:grid; place-items:center; width:34px; height:34px; flex:none; border-radius:10px; background:var(--stage-2); color:var(--spotlight); }
-@media (max-width:860px){ .lobby-layout{ display:block; } }
+@media (max-width:860px){
+  .lobby-layout{ display:block; }
+  #menuView.active{ display:flex; flex-direction:column; gap:14px; }
+  .menu-intro{ text-align:center; }
+  .menu-intro h2{ font-size:clamp(25px,6vw,34px); margin-bottom:6px; }
+  .menu-intro p{ display:none; }
+  .menu-steps{ display:flex; justify-content:center; flex-wrap:wrap; gap:7px; margin:12px 0 0; }
+  .menu-step{ gap:5px; font-size:11px; padding:4px 8px 4px 4px; background:var(--stage-2); border:1px solid var(--line); border-radius:999px; white-space:nowrap; }
+  .menu-step span{ width:22px; height:22px; border-radius:50%; }
+  .menu-form{ width:100%; }
+}
 /* Confetti burst (reserved for the big win moment) */
 .confetti-piece{
   position:fixed; top:-10px; width:8px; height:14px; z-index:95; pointer-events:none;
@@ -531,6 +558,8 @@ button.btn-block{ width:100%; }
 </style>
 </head>
 <body>
+
+<a class="skip-link" href="#gameMain">Skip to game</a>
 
 <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
@@ -552,7 +581,7 @@ button.btn-block{ width:100%; }
 <button class="fab-scoreboard" id="fabScoreboard">🏆 Scores</button>
 
 <div class="app-wrapper">
-  <div class="container">
+  <div class="container" id="gameMain" tabindex="-1">
 
     <div class="brand" id="brandHeader">
       <h1 class="brand-title">Rhyme Match</h1>
@@ -567,7 +596,7 @@ button.btn-block{ width:100%; }
       <button class="sound-toggle" id="soundToggleBtn" title="Toggle sound" aria-label="Toggle sound">🔊</button>
     </div>
 
-    <p class="connection-status" id="connectionStatus" role="status" aria-live="polite">● Not connected</p>
+    <p class="connection-status" id="connectionStatus" role="status" aria-live="polite">Not connected — host or join to begin</p>
     <section class="connection-help" id="connectionHelp" aria-labelledby="connectionHelpTitle" hidden>
       <h2 id="connectionHelpTitle">Connection help</h2>
       <ol id="connectionHelpSteps"></ol>
@@ -594,11 +623,12 @@ button.btn-block{ width:100%; }
       </div>
       <div class="menu-form">
       <label class="field-label" for="inputPlayerName">Your nickname</label>
-      <input type="text" id="inputPlayerName" maxlength="15" placeholder="What should we call you?">
+      <input type="text" id="inputPlayerName" name="nickname" maxlength="15" autocomplete="nickname" aria-describedby="nicknameFeedback" placeholder="e.g. RhymeStar" required>
+      <p class="field-feedback" id="nicknameFeedback" aria-live="polite">1–15 characters. This name appears to other players.</p>
 
       <div class="tab-row" style="margin-top:16px;">
-        <button type="button" class="tab-btn active" id="tabHost">Host a game</button>
-        <button type="button" class="tab-btn" id="tabJoin">Join a game</button>
+        <button type="button" class="tab-btn active" id="tabHost" aria-pressed="true">Host a game</button>
+        <button type="button" class="tab-btn" id="tabJoin" aria-pressed="false">Join a game</button>
       </div>
 
       <div class="menu-panel active" id="panelHost">
@@ -608,7 +638,8 @@ button.btn-block{ width:100%; }
 
       <div class="menu-panel" id="panelJoin">
         <label class="field-label" for="inputJoinId">Host's room code</label>
-        <input type="text" id="inputJoinId" placeholder="Paste the code here">
+        <input type="text" id="inputJoinId" name="room-code" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="roomCodeFeedback" placeholder="e.g. ABCD2345 or paste a link">
+        <p class="field-feedback" id="roomCodeFeedback" aria-live="polite">Paste a room code or the full join link.</p>
         <button class="btn-primary btn-block" id="btnJoinInit" style="margin-top:10px;">Join Game</button>
       </div>
       </div>
@@ -623,11 +654,12 @@ button.btn-block{ width:100%; }
       <div class="room-code-card" id="roomCodeSection">
         <div class="room-share-info">
           <p class="room-share-label">Invite Your Players</p>
-          <div class="room-code-value" id="displayPeerId" translate="no">-</div>
+          <div class="room-code-value" translate="no"><button id="displayPeerId" type="button" title="Copy room code" aria-label="Copy room code">-</button></div>
           <p class="room-share-hint">Share the link, show the QR code, or send the room code.</p>
           <div class="copy-row">
             <button class="btn-ghost btn-sm" id="btnCopyCode">📋 Copy Code</button>
             <button class="btn-ghost btn-sm" id="btnCopyLink">🔗 Copy Join Link</button>
+            <button class="btn-ghost btn-sm" id="btnShareRoom" hidden>↗ Share Room</button>
           </div>
         </div>
         <div class="room-qr" id="roomQrPanel" hidden>
@@ -1066,12 +1098,12 @@ class UIManager {
     document.getElementById('playerRoster').innerHTML = players.map(p => `
       <span class="player-chip ${p.id === myPeerId ? 'you' : ''}">
         ${p.eliminated ? '<span class="avatar">💀</span>' : avatarDot(p.colorIndex)}${escapeHtml(p.name)}${p.connected === false ? ' · offline' : p.pendingNextRound ? ' · next round' : ''}
-      </span>`).join('');
+      </span>`).join('') + (count < 2 ? '<span class="player-chip waiting-slot" aria-label="Waiting for another player">＋ Waiting for a player</span>' : '');
 
     const startBtn = document.getElementById('btnStartRound');
     if (startBtn){
       startBtn.disabled = count < 2;
-      startBtn.innerText = count < 2 ? "Need 2+ Players" : `Start — Pick Target Word (${count} Players)`;
+      startBtn.innerText = count < 2 ? "Waiting for 1 More Player" : `Start — Pick Target Word (${count} Players)`;
     }
     UIManager.renderScoreboard(players);
   }
@@ -1290,7 +1322,7 @@ let voteNextAction = 'quick';
 let voteTransitionPending = false;
 function setConnectionStatus(message, state){
   const el = document.getElementById('connectionStatus');
-  el.textContent = '● ' + message;
+  el.textContent = message;
   el.className = 'connection-status ' + (state || '');
   if (state === 'online') document.getElementById('connectionHelp').hidden = true;
 }
@@ -1336,9 +1368,22 @@ function broadcastReadyStatus(){
 const connections = new Map();
 
 function getValidatedName(){
-  const raw = document.getElementById('inputPlayerName').value.trim();
-  return raw || `Player_${Math.floor(100 + Math.random() * 900)}`;
+  const input = document.getElementById('inputPlayerName');
+  const raw = input.value.trim().replace(/\s+/g, ' ');
+  const feedback = document.getElementById('nicknameFeedback');
+  if (!raw){ feedback.textContent = 'Enter a nickname to continue.'; feedback.className = 'field-feedback error'; input.setAttribute('aria-invalid','true'); input.focus(); return null; }
+  feedback.textContent = `${raw.length} / 15 characters · ready to play`;
+  feedback.className = 'field-feedback ok'; input.removeAttribute('aria-invalid');
+  return raw;
 }
+document.getElementById('inputPlayerName').addEventListener('input', () => {
+  const input = document.getElementById('inputPlayerName');
+  const feedback = document.getElementById('nicknameFeedback');
+  const count = input.value.trim().length;
+  feedback.textContent = count ? `${count} / 15 characters · ready to play` : '1–15 characters. This name appears to other players.';
+  feedback.className = 'field-feedback' + (count ? ' ok' : '');
+  input.removeAttribute('aria-invalid');
+});
 
 /* --- Menu tabs --- */
 document.getElementById('tabHost').addEventListener('click', () => {
@@ -1346,12 +1391,16 @@ document.getElementById('tabHost').addEventListener('click', () => {
   document.getElementById('tabJoin').classList.remove('active');
   document.getElementById('panelHost').classList.add('active');
   document.getElementById('panelJoin').classList.remove('active');
+  document.getElementById('tabHost').setAttribute('aria-pressed','true');
+  document.getElementById('tabJoin').setAttribute('aria-pressed','false');
 });
 document.getElementById('tabJoin').addEventListener('click', () => {
   document.getElementById('tabJoin').classList.add('active');
   document.getElementById('tabHost').classList.remove('active');
   document.getElementById('panelJoin').classList.add('active');
   document.getElementById('panelHost').classList.remove('active');
+  document.getElementById('tabJoin').setAttribute('aria-pressed','true');
+  document.getElementById('tabHost').setAttribute('aria-pressed','false');
 });
 
 /* --- Sound toggle --- */
@@ -1381,6 +1430,30 @@ document.getElementById('btnCopyCode').addEventListener('click', async () => {
   const code = document.getElementById('displayPeerId').innerText;
   try { await navigator.clipboard.writeText(code); showToast('Room code copied!', 'success'); }
   catch (e) { showToast('Could not copy — copy it manually.', 'error'); }
+});
+document.getElementById('displayPeerId').addEventListener('click', () => document.getElementById('btnCopyCode').click());
+
+function normalizeRoomInput(value){
+  let candidate = String(value || '').trim();
+  if (/^https?:\/\//i.test(candidate)){
+    try { const url = new URL(candidate); candidate = url.searchParams.get('room') || url.searchParams.get('host') || ''; }
+    catch(e){ return ''; }
+  }
+  return candidate.replace(/[\s-]/g, '').toUpperCase();
+}
+document.getElementById('inputJoinId').addEventListener('input', () => {
+  const input = document.getElementById('inputJoinId');
+  const normalized = normalizeRoomInput(input.value);
+  const feedback = document.getElementById('roomCodeFeedback');
+  const valid = /^[A-Z2-9]{8}$/.test(normalized);
+  feedback.textContent = !normalized ? 'Paste a room code or the full join link.' : valid ? 'Room code looks ready.' : 'Enter the 8-character code from the host’s link.';
+  feedback.className = 'field-feedback' + (!normalized ? '' : valid ? ' ok' : ' error');
+  input.setAttribute('aria-invalid', normalized && !valid ? 'true' : 'false');
+});
+document.getElementById('inputJoinId').addEventListener('change', () => {
+  const input = document.getElementById('inputJoinId');
+  const normalized = normalizeRoomInput(input.value);
+  if (/^[A-Z2-9]{8}$/.test(normalized)) input.value = normalized;
 });
 
 /* --- Shareable room link, with a code fallback for browsers without clipboard access. --- */
@@ -1418,9 +1491,16 @@ document.getElementById('btnCopyLink').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(link); showToast('Join link copied!', 'success'); }
   catch(e){ showModal('Share this link', link); }
 });
+const shareRoomBtn = document.getElementById('btnShareRoom');
+if (typeof navigator.share === 'function') shareRoomBtn.hidden = false;
+shareRoomBtn.addEventListener('click', async () => {
+  const code = document.getElementById('displayPeerId').textContent.trim();
+  try { await navigator.share({ title:'Join my Rhyme Match room', text:`Room ${code}`, url:joinUrl(code) }); }
+  catch(error){ if (error.name !== 'AbortError') showToast('Could not open sharing. Use Copy Join Link.', 'error'); }
+});
 const incomingRoom = new URL(window.location.href).searchParams.get('room');
 if (incomingRoom){
-  document.getElementById('inputJoinId').value = incomingRoom;
+  document.getElementById('inputJoinId').value = normalizeRoomInput(incomingRoom);
   document.getElementById('tabJoin').click();
   setConnectionStatus('Room link ready — enter a nickname to join', 'pending');
 }
@@ -1547,7 +1627,9 @@ function showWaitingForNextRound(message){
   document.getElementById('waitingRoomStatus').textContent = message || 'Connected to the same room; waiting for the next round.';
 }
 function showRoomIdentity(code){
-  document.getElementById('displayPeerId').textContent = code;
+  const codeButton = document.getElementById('displayPeerId');
+  codeButton.textContent = code;
+  codeButton.setAttribute('aria-label', `Copy room code ${code}`);
   renderRoomQr(code);
 }
 function roomUrl(code, isRoomHost){
@@ -1750,13 +1832,15 @@ function resumeHostView(state){
 }
 async function startHost(){
   if (hostStarting || roomRef) return;
+  const requestedName = getValidatedName();
+  if (!requestedName) return;
   hostStarting = true;
   document.getElementById('btnHostInit').disabled = true;
   setConnectionStatus('Opening Firebase room…', 'pending');
   try {
     await ensureFirebase();
     isHost = true;
-    localName = getValidatedName();
+    localName = requestedName;
     rememberName(localName);
     hostUid = myPeerId;
     localConnectionId = roomRandomId();
@@ -1903,9 +1987,15 @@ function handleClientMessage(data, attempt){
 }
 async function startClient(){
   if (document.getElementById('btnJoinInit').disabled || roomRef) return;
-  const target = document.getElementById('inputJoinId').value.trim().toUpperCase();
+  const requestedName = getValidatedName();
+  if (!requestedName) return;
+  const target = normalizeRoomInput(document.getElementById('inputJoinId').value);
+  document.getElementById('inputJoinId').value = target;
   if (!validRoomCode(target)){
     shakeInput(document.getElementById('inputJoinId'));
+    document.getElementById('inputJoinId').focus();
+    document.getElementById('roomCodeFeedback').textContent = 'Enter the 8-character code from the host’s current link.';
+    document.getElementById('roomCodeFeedback').className = 'field-feedback error';
     showToast('Enter the 8-character code from the host’s current link.', 'error'); return;
   }
   const attempt = ++clientAttempt;
@@ -1914,7 +2004,7 @@ async function startClient(){
   try {
     await ensureFirebase();
     isHost = false;
-    localName = getValidatedName();
+    localName = requestedName;
     rememberName(localName);
     roomCode = target;
     roomRef = database.ref('rooms/' + roomCode);
@@ -2342,11 +2432,11 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
     } else if (!s.valid) {
       html += `<div class="result-row negative">${nameTag}<span class="result-word"><s>${escapeHtml(s.word)}</s> — invalid</span><span class="result-delta negative">${s.pointsEarned}</span></div>`;
     } else if (s.matches >= 2) {
-      html += `<div class="result-row positive">${nameTag}<span class="result-word">${escapeHtml(s.word)} — matched ${s.matches === 2 ? '1 other player' : (s.matches-1) + ' others'}</span><span class="result-delta positive">+${s.pointsEarned}</span></div>`;
+      html += `<div class="result-row positive ${s.matches > 2 ? 'big-match' : ''}">${nameTag}<span class="result-word">${escapeHtml(s.word)} — matched ${s.matches === 2 ? '1 other player' : (s.matches-1) + ' others'}<span class="result-kicker">${s.matches > 2 ? 'GROUP MATCH!' : 'PAIR MATCH!'}</span></span><span class="result-delta positive">+${s.pointsEarned}</span></div>`;
     } else {
       const cls = s.pointsEarned > 0 ? 'positive' : 'neutral';
       const sign = s.pointsEarned > 0 ? '+' : '';
-      html += `<div class="result-row ${cls}">${nameTag}<span class="result-word">${escapeHtml(s.word)} — no match</span><span class="result-delta ${s.pointsEarned>0?'positive':''}">${sign}${s.pointsEarned}</span></div>`;
+      html += `<div class="result-row ${cls}">${nameTag}<span class="result-word">${escapeHtml(s.word)} — ${results.mode === 'lonewolf' ? 'Lone Wolf' : 'no match'}</span><span class="result-delta ${s.pointsEarned>0?'positive':''}">${sign}${s.pointsEarned}</span></div>`;
     }
   });
 
