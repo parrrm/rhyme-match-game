@@ -1,0 +1,22 @@
+name: Remote join probe
+on:
+  workflow_dispatch:
+    inputs:
+      room_id:
+        description: Temporary host room ID for connectivity probe
+        required: true
+        type: string
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install chromium --with-deps
+      - run: node tests/remote-join.cjs
+        env:
+          ROOM_ID: ${{ inputs.room_id }}
