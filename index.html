@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="./qrcode.js"></script>
 <script src="./connection-help.js"></script>
+<script src="./results-ranking.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-database-compat.js"></script>
@@ -426,6 +427,39 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 }
 .winner-banner .trophy{ font-size:38px; display:block; margin-bottom:6px; }
 .winner-banner .winner-name{ font-family:var(--font-display); font-size:24px; font-weight:700; color:#ffd23d; }
+.round-story{ margin:8px 0 20px; }
+.round-story .headline-banner{ font-size:clamp(20px,3vw,30px); line-height:1.2; margin:0 0 6px; }
+.round-story .target-context{ text-align:center; margin:0; font-size:14px; }
+.results-section-title{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:14px 0 9px; font-size:17px; font-weight:800; color:var(--paper); }
+.results-section-title small{ font-size:12px; font-weight:600; color:var(--muted); }
+.round-ranking{ display:grid; gap:8px; }
+.round-rank-row{ display:grid; grid-template-columns:58px minmax(0,1fr) auto; align-items:center; gap:12px; min-width:0; padding:12px 15px; border:1px solid var(--line); border-left:4px solid var(--line); border-radius:var(--radius-md); background:var(--stage-2); animation:rowIn .3s ease both; }
+.round-rank-row:nth-child(2){ animation-delay:.05s; } .round-rank-row:nth-child(3){ animation-delay:.1s; } .round-rank-row:nth-child(n+4){ animation-delay:.14s; }
+.round-rank-row.positive{ border-left-color:var(--confetti); background:linear-gradient(90deg,rgba(182,255,60,.09),var(--stage-2) 50%); }
+.round-rank-row.negative{ border-left-color:var(--danger); background:linear-gradient(90deg,rgba(255,59,59,.1),var(--stage-2) 50%); }
+.round-rank-row.top-three{ box-shadow:0 0 0 1px rgba(41,226,255,.12),0 5px 18px rgba(0,0,0,.14); }
+.round-rank-row.you{ outline:2px solid var(--spotlight); outline-offset:1px; }
+.round-rank-row.out{ opacity:.72; }
+.rank-movement{ display:grid; justify-items:center; gap:2px; font-size:11px; font-weight:800; color:var(--muted); font-variant-numeric:tabular-nums; }
+.rank-movement strong{ font-size:18px; line-height:1; }
+.rank-movement.up{ color:var(--confetti); } .rank-movement.down{ color:#ff9a9a; }
+.round-player{ min-width:0; }
+.round-player-name{ display:block; font-weight:800; font-size:15px; overflow-wrap:anywhere; }
+.round-player-detail{ display:block; color:var(--muted); font-size:13px; line-height:1.3; overflow-wrap:anywhere; }
+.round-score{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.round-score strong{ display:block; font-family:var(--font-display); font-size:clamp(20px,3vw,27px); line-height:1.1; }
+.round-score small{ display:block; color:var(--muted); font-size:12px; font-weight:700; }
+.round-score.positive strong{ color:var(--confetti); } .round-score.negative strong{ color:#ff9a9a; }
+.you-tag{ display:inline-block; margin-left:6px; padding:1px 5px; border-radius:5px; background:var(--spotlight); color:var(--ink); font-size:10px; font-weight:900; vertical-align:middle; }
+.standings-snapshot{ margin:16px 0 4px; padding:14px; border:1px solid var(--line); border-radius:var(--radius-md); background:rgba(28,37,68,.7); }
+.standings-snapshot h3{ margin:0 0 8px; font-size:15px; }
+.standings-chips{ display:flex; flex-wrap:wrap; gap:7px; }
+.standings-chip{ padding:5px 9px; border-radius:999px; background:var(--stage); border:1px solid var(--line); font-size:12px; font-weight:700; }
+.standings-chip.you{ border-color:var(--spotlight); }
+.standings-summary{ margin:10px 0 0; font-size:13px; }
+.prediction-details{ margin:12px 0; color:var(--muted); font-size:13px; }
+.prediction-details summary{ cursor:pointer; font-weight:700; color:var(--spotlight); }
+@media (max-width:540px){ .round-rank-row{ grid-template-columns:42px minmax(0,1fr) auto; gap:7px; padding:11px 9px; } .round-player-name{ font-size:14px; } .round-player-detail{ font-size:12px; } .round-score small{ font-size:11px; } }
 
 /* Spectator (eliminated) */
 .spectator-card{
@@ -461,7 +495,16 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 .score-list li{ display:flex; justify-content:space-between; padding:8px 4px; font-size:14px; border-bottom:1px solid var(--line); }
 .score-list li:last-child{ border-bottom:none; }
 .score-list .rank{ color:var(--muted); width:22px; display:inline-block; }
-.score-list li.eliminated{ opacity:.45; text-decoration:line-through; }
+.score-list li.you{ background:rgba(41,226,255,.1); border-radius:8px; padding-left:7px; padding-right:7px; }
+.score-list li.eliminated{ opacity:.55; }
+.score-player{ min-width:0; display:flex; align-items:center; gap:3px; }
+.score-name{ overflow-wrap:anywhere; }
+.score-values{ display:flex; align-items:center; gap:6px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.score-delta{ padding:2px 5px; border-radius:5px; background:rgba(255,255,255,.08); color:var(--muted); font-size:11px; font-weight:800; }
+.score-delta.positive{ color:var(--confetti); background:rgba(182,255,60,.1); }
+.score-delta.negative{ color:#ff9a9a; background:rgba(255,59,59,.12); }
+.podium-slot.you .podium-name{ color:var(--spotlight); }
+.podium-slot.eliminated{ opacity:.55; }
 
 /* Mobile scoreboard sheet */
 .fab-scoreboard{
@@ -1055,6 +1098,7 @@ function spawnConfetti(){
    UI CONTROLLER
    ============================================================ */
 const PHASES = ['target','rhyme','judge','results'];
+function formatDelta(value){ const amount = Number(value) || 0; return amount > 0 ? `+${amount}` : String(amount); }
 class UIManager {
   static showView(viewId){
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -1109,17 +1153,29 @@ class UIManager {
   }
 
   static renderScoreboard(players){
-    const sorted = [...players].sort((a,b) => b.score - a.score);
+    const sorted = ResultsRanking.build(players).standings;
     const podiumHtml = UIManager.buildPodium(sorted);
     const listHtml = sorted.map((p,i) => `
-      <li class="${p.eliminated ? 'eliminated' : ''}">
-        <span><span class="rank">${i+1}.</span>${avatarDot(p.colorIndex)}${escapeHtml(p.name)}</span>
-        <b>${p.score}</b>
+      <li data-player-id="${escapeHtml(p.id)}" class="${p.eliminated ? 'eliminated' : ''} ${p.id === myPeerId ? 'you' : ''}">
+        <span class="score-player"><span class="rank">${i+1}.</span>${p.eliminated ? '<span aria-label="Eliminated">💀</span>' : avatarDot(p.colorIndex)}<span class="score-name">${escapeHtml(p.name)}</span>${p.id === myPeerId ? '<small class="you-tag">YOU</small>' : ''}</span>
+        <span class="score-values"><b>${p.score}</b>${p.lastDelta == null ? '' : `<small class="score-delta ${p.lastDelta > 0 ? 'positive' : p.lastDelta < 0 ? 'negative' : 'neutral'}" aria-label="Last round ${formatDelta(p.lastDelta)}">${formatDelta(p.lastDelta)}</small>`}</span>
       </li>`).join('');
     document.getElementById('sidebarPodium').innerHTML = podiumHtml;
-    document.getElementById('sidebarScoreList').innerHTML = listHtml;
     document.getElementById('mobilePodium').innerHTML = podiumHtml;
-    document.getElementById('mobileScoreList').innerHTML = listHtml;
+    ['sidebarScoreList','mobileScoreList'].forEach(id => {
+      const list = document.getElementById(id);
+      const previous = new Map([...list.children].map(row => [row.dataset.playerId, row.getBoundingClientRect().top]));
+      list.innerHTML = listHtml;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      [...list.children].forEach(row => {
+        const before = previous.get(row.dataset.playerId);
+        if (before == null) return;
+        const distance = before - row.getBoundingClientRect().top;
+        if (Math.abs(distance) > 2 && Math.abs(distance) < 800 && typeof row.animate === 'function'){
+          row.animate([{ transform:`translateY(${distance}px)` }, { transform:'translateY(0)' }], { duration:260, easing:'cubic-bezier(.22,1,.36,1)' });
+        }
+      });
+    });
   }
 
   static buildPodium(sorted){
@@ -1128,7 +1184,7 @@ class UIManager {
     const order = [1,0,2].filter(i => sorted[i]); // silver, gold, bronze visual order
     const slotClass = { 0:'first', 1:'second', 2:'third' };
     return `<div class="podium">${order.map(i => `
-      <div class="podium-slot ${slotClass[i]}">
+      <div class="podium-slot ${slotClass[i]} ${sorted[i].id === myPeerId ? 'you' : ''} ${sorted[i].eliminated ? 'eliminated' : ''}">
         <div class="podium-medal">${medals[i]}</div>
         <div class="podium-bar"></div>
         <div class="podium-name">${avatarDot(sorted[i].colorIndex)}${escapeHtml(sorted[i].name)}<br>${sorted[i].score}</div>
@@ -1200,7 +1256,7 @@ class RhymeGameEngine {
   }
   addPlayer(id, name){
     const colorIndex = this.players.size % PLAYER_COLORS.length;
-    this.players.set(id, { id, name, score:0, delta:0, eliminated:false, colorIndex, connected:true, pendingNextRound:false, sessionId:null });
+    this.players.set(id, { id, name, score:0, delta:0, lastDelta:null, eliminated:false, colorIndex, connected:true, pendingNextRound:false, sessionId:null });
   }
   removePlayer(id){ this.players.delete(id); this.submissions.delete(id); this.predictions.delete(id); this.predictionCounts.delete(id); }
   activePlayers(){ return Array.from(this.players.values()).filter(p => p.connected !== false && !p.pendingNextRound && !p.eliminated); }
@@ -1301,7 +1357,7 @@ class RhymeGameEngine {
     this.predictionEndRound = 0;
     this.predictionCounts.clear();
     this.predictionStake = 0;
-    this.players.forEach(p => { p.score = 0; p.delta = 0; p.eliminated = false; if (p.connected !== false) p.pendingNextRound = false; });
+    this.players.forEach(p => { p.score = 0; p.delta = 0; p.lastDelta = null; p.eliminated = false; if (p.connected !== false) p.pendingNextRound = false; });
   }
 }
 
@@ -2379,6 +2435,7 @@ document.getElementById('btnFinalizeScores').addEventListener('click', () => {
   updatePredictionResults(results);
   const elim = engine.applyElimination();
   if (elim.gameOver && engine.predictionRound) { settlePredictionResults(results); delete results.voteProgress; }
+  engine.players.forEach(player => { player.lastDelta = player.delta; });
   const playersSnapshot = Array.from(engine.players.values());
   lastResultsPacket = { results, players:playersSnapshot, eliminatedNames:elim.eliminatedNames, gameOver:elim.gameOver, winnerName:elim.winnerName };
 
@@ -2395,6 +2452,7 @@ function buildHeadline(results){
   const best = Object.entries(groups).sort((a,b) => b[1]-a[1])[0];
   if (best && best[1] >= 2) return `${best[1]}-way match on "${best[0]}"!`;
   if (valid.length === 0) return "Nobody landed a valid rhyme this round.";
+  if (results.mode === 'lonewolf') return 'Lone wolves ruled this round!';
   return "No matches this round — everyone went their own way.";
 }
 
@@ -2406,41 +2464,47 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
   UIManager.showView('resultsView');
   UIManager.renderScoreboard(players);
 
-  let html = '';
-  if (gameOver && winnerName) {
-    html += `<div class="winner-banner"><span class="trophy">🏆</span><div>Champion</div><div class="winner-name">${escapeHtml(winnerName)}</div></div>`;
-  } else {
-    html += `<div class="headline-banner">${escapeHtml(buildHeadline(results))}</div>`;
-  }
-  if (eliminatedNames && eliminatedNames.length) {
-    html += `<div class="elim-banner">💀 ${eliminatedNames.map(escapeHtml).join(', ')} eliminated this round</div>`;
-  }
-  html += `<p style="text-align:center;">Target word: <b style="color:var(--confetti);">${escapeHtml(results.target)}</b></p>`;
-  if (results.voteProgress) html += `<p style="text-align:center;">🔮 Your partner prediction settles after round ${results.voteProgress}.</p>`;
-  if (results.voteResults && results.voteResults.length){
-    html += `<div class="headline-banner">🔮 Prediction results</div>`;
-    results.voteResults.forEach(v => { html += `<p>${escapeHtml(v.voterName)}: ${v.pickName ? escapeHtml(v.pickName) + ' (' + v.matches + ' matches)' : 'skipped'} — ${v.delta > 0 ? '+' : ''}${v.delta}</p>`; });
-  }
-
-  results.submissions.forEach(s => {
-    const nameTag = `<span class="result-name">${avatarDot(s.colorIndex)}${escapeHtml(s.name)}</span>`;
-    if (s.outOfGame) {
-      const label = s.disconnected ? "Disconnected" : s.waiting ? "Joining next round" : "Spectating";
-      html += `<div class="result-row out neutral">${nameTag}<span class="result-word">${label}</span></div>`;
-    } else if (s.timeout) {
-      html += `<div class="result-row negative">${nameTag}<span class="result-word">No submission</span><span class="result-delta negative">${s.pointsEarned}</span></div>`;
-    } else if (!s.valid) {
-      html += `<div class="result-row negative">${nameTag}<span class="result-word"><s>${escapeHtml(s.word)}</s> — invalid</span><span class="result-delta negative">${s.pointsEarned}</span></div>`;
-    } else if (s.matches >= 2) {
-      html += `<div class="result-row positive ${s.matches > 2 ? 'big-match' : ''}">${nameTag}<span class="result-word">${escapeHtml(s.word)} — matched ${s.matches === 2 ? '1 other player' : (s.matches-1) + ' others'}<span class="result-kicker">${s.matches > 2 ? 'GROUP MATCH!' : 'PAIR MATCH!'}</span></span><span class="result-delta positive">+${s.pointsEarned}</span></div>`;
-    } else {
-      const cls = s.pointsEarned > 0 ? 'positive' : 'neutral';
-      const sign = s.pointsEarned > 0 ? '+' : '';
-      html += `<div class="result-row ${cls}">${nameTag}<span class="result-word">${escapeHtml(s.word)} — ${results.mode === 'lonewolf' ? 'Lone Wolf' : 'no match'}</span><span class="result-delta ${s.pointsEarned>0?'positive':''}">${sign}${s.pointsEarned}</span></div>`;
-    }
+  const ranking = ResultsRanking.build(players);
+  const submissions = new Map((results.submissions || []).map(submission => [submission.id, submission]));
+  const myStanding = ranking.round.find(row => row.player.id === myPeerId);
+  let html = '<div class="round-story">';
+  if (gameOver && winnerName) html += `<div class="winner-banner"><span class="trophy" aria-hidden="true">🏆</span><div>Champion</div><div class="winner-name">${escapeHtml(winnerName)}</div></div>`;
+  html += `<div class="headline-banner">${escapeHtml(buildHeadline(results))}</div>`;
+  if (eliminatedNames && eliminatedNames.length) html += `<div class="elim-banner">💀 ${eliminatedNames.map(escapeHtml).join(', ')} eliminated this round</div>`;
+  html += `<p class="target-context">Target word: <b style="color:var(--confetti);">${escapeHtml(results.target)}</b></p></div>`;
+  html += '<section aria-label="Points this round"><h3 class="results-section-title">Points This Round <small>Sorted by round points</small></h3><div class="round-ranking">';
+  ranking.round.forEach(row => {
+    const p = row.player;
+    const sub = submissions.get(p.id);
+    const delta = Number(p.delta) || 0;
+    const movement = row.movement > 0 ? `↑ ${row.movement}` : row.movement < 0 ? `↓ ${Math.abs(row.movement)}` : '—';
+    const movementLabel = row.movement > 0 ? `Up ${row.movement} ${row.movement === 1 ? 'place' : 'places'}` : row.movement < 0 ? `Down ${Math.abs(row.movement)} ${row.movement === -1 ? 'place' : 'places'}` : 'No rank change';
+    let word = sub && sub.word ? escapeHtml(sub.word) : 'No submission';
+    if (sub?.outOfGame) word = sub.disconnected ? 'Disconnected' : sub.waiting ? 'Joining next round' : 'Spectating';
+    else if (sub?.timeout) word = 'No submission';
+    else if (sub && !sub.valid) word += ' · invalid rhyme';
+    else if (sub?.matches >= 2) word += ` · ${sub.matches}-player match`;
+    else if (sub && results.mode === 'lonewolf') word += ' · Lone Wolf';
+    else if (sub) word += ' · no match';
+    const predictionDelta = sub ? delta - (Number(sub.pointsEarned) || 0) : 0;
+    if (predictionDelta) word += ` · prediction ${formatDelta(predictionDelta)}`;
+    const tone = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+    html += `<div class="round-rank-row ${tone} ${row.roundRank <= 3 ? 'top-three' : ''} ${p.id === myPeerId ? 'you' : ''} ${sub?.outOfGame ? 'out' : ''}">
+      <span class="rank-movement ${row.movement > 0 ? 'up' : row.movement < 0 ? 'down' : ''}" aria-label="${movementLabel}"><strong>${movement}</strong><span>rank</span></span>
+      <span class="round-player"><span class="round-player-name">${avatarDot(p.colorIndex)}${escapeHtml(p.name)}${p.id === myPeerId ? '<span class="you-tag">YOU</span>' : ''}</span><span class="round-player-detail">${word}</span></span>
+      <span class="round-score ${tone}"><strong>${formatDelta(delta)}</strong><small>→ ${p.score} total</small></span>
+    </div>`;
   });
+  html += '</div></section>';
+  const topThree = ranking.standings.slice(0, 3);
+  html += `<section class="standings-snapshot" aria-label="Current standings"><h3>Current Standings</h3><div class="standings-chips">${topThree.map((p, i) => `<span class="standings-chip ${p.id === myPeerId ? 'you' : ''}">${i + 1}. ${avatarDot(p.colorIndex)}${escapeHtml(p.name)} ${p.score}</span>`).join('')}</div>`;
+  if (myStanding) html += `<p class="standings-summary">${ranking.standings[0].id === myPeerId ? 'You lead' : `${escapeHtml(ranking.standings[0].name)} leads`} with ${ranking.standings[0].score} · You are #${myStanding.currentRank} with ${myStanding.player.score}.</p>`;
+  html += '</section>';
+  if (results.voteProgress) html += `<p class="standings-summary">🔮 Your partner prediction settles after round ${results.voteProgress}.</p>`;
+  if (results.voteResults?.length) html += `<details class="prediction-details"><summary>Prediction Results</summary>${results.voteResults.map(v => `<p>${escapeHtml(v.voterName)}: ${v.pickName ? escapeHtml(v.pickName) + ' (' + v.matches + ' matches)' : 'skipped'} · ${formatDelta(v.delta)}</p>`).join('')}</details>`;
 
   document.getElementById('resultsContent').innerHTML = html;
+  window.scrollTo(0, 0);
   if (gameOver) spawnConfetti();
   if (gameOver) Sound.win();
 
@@ -2475,7 +2539,7 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
       engine.predictionCounts.clear();
       engine.predictionStake = 0;
       engine.mode = engine.mode;
-      engine.players.forEach(p => { p.score = 0; p.delta = 0; p.eliminated = false; });
+      engine.players.forEach(p => { p.score = 0; p.delta = 0; p.lastDelta = null; p.eliminated = false; });
       localScore = 0; currentRound = 1;
       UIManager.updateHeader(1, 0, engine.mode, false);
       UIManager.showView('lobbyView');
