@@ -242,15 +242,16 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 .menu-panel.active{ display:block; animation:viewIn .25s ease; }
 
 .room-code-card{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) 180px;
+  display:flex;
+  flex-direction:column;
   align-items:center;
-  gap:22px;
+  gap:10px;
   background:var(--stage-2);
-  border:1.5px dashed var(--spotlight);
+  border:1px solid var(--line);
   border-radius:var(--radius-md);
   padding:18px;
-  margin:14px 0;
+  height:100%;
+  text-align:center;
 }
 .room-code-value{
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -262,31 +263,86 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 }
 .room-code-value button{ color:inherit; background:transparent; border:0; padding:0; min-height:48px; box-shadow:none; font:inherit; letter-spacing:inherit; border-radius:4px; }
 .room-code-value button:hover{ text-decoration:underline; }
-.copy-row{ display:flex; gap:8px; justify-content:flex-start; align-items:center; margin-top:16px; flex-wrap:wrap; }
+.copy-row{ display:flex; gap:8px; justify-content:center; align-items:center; margin-top:6px; flex-wrap:wrap; }
 .room-qr{ display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
 .room-qr[hidden]{ display:none; }
 .room-qr-code{ width:180px; height:180px; display:grid; place-items:center; background:white; padding:8px; border-radius:14px; }
 .room-qr-code svg{ display:block; width:100%; height:100%; }
 .room-qr-label{ margin:0; font-size:13px; font-weight:700; color:var(--paper); }
-.room-share-label{ font-weight:800; color:var(--paper); font-size:16px; margin-bottom:8px; }
-.room-share-hint{ font-size:14px; margin-top:8px; }
-@media (max-width:650px){ .room-code-card{ grid-template-columns:1fr; } .room-qr-code{ width:172px; height:172px; } .copy-row{ justify-content:center; } .room-share-info{ text-align:center; } }
+.room-share-label{ font-weight:800; color:var(--paper); font-size:16px; margin:0; }
+.room-share-hint{ font-size:12px; margin:0; }
+.room-code-caption{ margin:2px 0 0; color:var(--muted); font-size:11px; font-weight:800; letter-spacing:.12em; }
+.room-copy-feedback{ min-height:18px; margin:0; color:var(--muted); font-size:12px; font-weight:800; }
+.room-copy-feedback.copied{ color:var(--confetti); }
+@media (max-width:650px){ .room-qr-code{ width:172px; height:172px; } }
 
-.roster{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:10px 0; }
+.roster{ display:grid; gap:8px; margin:10px 0 0; }
 .player-chip{
   background:var(--stage-2);
   border:1px solid var(--line);
-  padding:7px 13px;
-  border-radius:999px;
-  font-size:13.5px;
+  padding:10px 13px;
+  border-radius:var(--radius-sm);
+  font-size:14px;
   font-weight:600;
   display:flex;
   align-items:center;
   gap:6px;
+  min-height:48px;
 }
 .player-chip.you{ border-color:var(--spotlight); box-shadow:0 0 0 2px rgba(41,226,255,.25); }
 .player-chip .avatar{ font-size:15px; }
 .player-chip.waiting-slot{ border-style:dashed; color:var(--muted); background:transparent; }
+.player-chip.offline{ opacity:.6; }
+.player-chip .player-name{ min-width:0; overflow-wrap:anywhere; }
+.player-chip .host-badge{ margin-left:auto; color:var(--spotlight); font-size:11px; font-weight:800; white-space:nowrap; }
+.player-chip .player-presence{ width:9px; height:9px; border-radius:50%; flex:none; background:var(--confetti); box-shadow:0 0 8px rgba(182,255,60,.45); }
+.player-chip.offline .player-presence, .player-chip.waiting-slot .player-presence{ background:var(--muted); box-shadow:none; }
+.lobby-game{ background:rgba(28,37,68,.48); border:1px solid var(--line); border-radius:var(--radius-lg); padding:20px; margin-bottom:16px; }
+.lobby-game-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+.lobby-game h1{ margin:0; font-family:'Titan One',ui-rounded,'Segoe UI',sans-serif; font-size:clamp(26px,4vw,32px); font-weight:700; background:linear-gradient(135deg,var(--spotlight),#f2f0ff 45%,var(--curtain)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.lobby-game p{ margin:5px 0 0; }
+.lobby-mode{ display:inline-flex; align-items:center; gap:6px; margin-top:10px; color:var(--confetti); font-weight:800; }
+.lobby-zone{ background:rgba(28,37,68,.48); border:1px solid var(--line); border-radius:var(--radius-lg); padding:18px; min-width:0; }
+.lobby-zone h2{ margin:0; font-size:16px; }
+.lobby-zone-title{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.lobby-zone-title p{ margin:0; font-size:13px; }
+.lobby-settings{ margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
+.lobby-settings summary{ cursor:pointer; color:var(--spotlight); font-weight:800; min-height:48px; display:flex; align-items:center; }
+.lobby-settings summary::after{ content:'⌄'; margin-left:auto; }
+.lobby-settings[open] > summary::after, .lobby-advanced[open] > summary::after{ content:'⌃'; }
+.lobby-settings-note{ font-size:13px; }
+.lobby-rule-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:8px; margin-top:10px; }
+.lobby-rule{ background:var(--stage-2); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px; font-size:13px; }
+.lobby-rule strong{ display:block; color:var(--paper); }
+.lobby-advanced{ margin-top:10px; }
+.lobby-advanced summary{ min-height:40px; font-size:13px; }
+.lobby-actions{ text-align:center; margin-top:16px; }
+.lobby-actions .btn-primary{ width:min(100%,420px); min-height:54px; font-size:18px; }
+.lobby-actions .btn-primary:disabled{ opacity:.62; }
+.lobby-actions p{ margin:8px 0 0; }
+.lobby-actions .ready{ color:var(--confetti); font-weight:800; }
+.tutorial-dialog{ border:1px solid var(--spotlight); border-radius:var(--radius-lg); background:var(--stage); color:var(--paper); width:min(92vw,530px); padding:22px; box-shadow:var(--shadow); }
+.tutorial-dialog::backdrop{ background:rgba(3,5,19,.78); }
+.tutorial-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+.tutorial-head h2{ margin:0; }
+.tutorial-progress{ color:var(--spotlight); font-size:13px; font-weight:800; margin:8px 0 16px; }
+.tutorial-step[hidden]{ display:none; }
+.tutorial-visual{ background:var(--stage-2); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px; min-height:146px; display:grid; place-content:center; gap:8px; text-align:center; }
+.tutorial-target{ color:var(--confetti); font-size:32px; font-weight:900; letter-spacing:.06em; }
+.tutorial-answers{ display:flex; justify-content:center; flex-wrap:wrap; gap:8px; }
+.tutorial-answer{ padding:8px 10px; border:1px solid var(--line); border-radius:10px; font-weight:800; }
+.tutorial-answer.matched{ border-color:var(--confetti); color:var(--confetti); background:rgba(182,255,60,.08); }
+.tutorial-step p{ margin:12px 0 0; color:var(--paper); }
+.tutorial-actions{ display:flex; justify-content:space-between; gap:10px; margin-top:18px; }
+.tutorial-actions button{ min-height:48px; }
+@media (prefers-reduced-motion:no-preference){
+  .tutorial-step:not([hidden]) .tutorial-visual{ animation:viewIn .24s ease; }
+  .tutorial-step:not([hidden]) .tutorial-answer{ animation:tutorialAnswerIn .3s ease both; }
+  .tutorial-step:not([hidden]) .tutorial-answer:nth-child(2){ animation-delay:.1s; }
+  .tutorial-step:not([hidden]) .tutorial-answer:nth-child(3){ animation-delay:.2s; }
+  .tutorial-step:not([hidden]) .tutorial-answer:nth-child(4){ animation-delay:.3s; }
+}
+@keyframes tutorialAnswerIn{ from{ opacity:0; transform:translateY(8px) scale(.96); } to{ opacity:1; transform:translateY(0) scale(1); } }
 .avatar-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:middle; flex-shrink:0; }
 
 .mode-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
@@ -570,8 +626,17 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
   #menuView.active{ display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,.9fr); gap:clamp(26px,5vw,72px); align-items:center; min-height:360px; }
   #menuView .menu-intro{ display:block; padding:24px 10px 24px 6px; }
   .menu-form{ background:var(--stage-2); border:1px solid var(--line); border-radius:var(--radius-lg); padding:28px; }
-  .lobby-layout{ display:grid; grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr); gap:24px; align-items:start; }
-  .lobby-options{ background:rgba(28,37,68,.48); border:1px solid var(--line); border-radius:var(--radius-lg); padding:22px; }
+  .lobby-layout{ display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,.82fr); gap:16px; align-items:stretch; }
+  .lobby-game{ padding:16px 20px; }
+  .lobby-settings{ margin-top:8px; padding-top:8px; }
+  .lobby-settings summary{ min-height:40px; }
+  .room-code-card{ display:grid; grid-template-columns:150px minmax(0,1fr); grid-template-areas:"qr caption" "qr code" "qr feedback" "qr action"; gap:4px 14px; min-height:190px; justify-items:start; text-align:left; }
+  .room-qr{ grid-area:qr; }
+  .room-qr-code{ width:150px; height:150px; }
+  .room-code-caption{ grid-area:caption; }
+  .room-code-value{ grid-area:code; font-size:clamp(25px,2.5vw,35px); letter-spacing:.08em; }
+  .room-copy-feedback{ grid-area:feedback; }
+  .copy-row{ grid-area:action; justify-content:flex-start; }
 }
 .menu-intro{ display:block; }
 .menu-intro h2{ font-size:clamp(32px,3.3vw,48px); line-height:1.1; margin-bottom:18px; }
@@ -581,6 +646,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 .menu-step span{ display:grid; place-items:center; width:34px; height:34px; flex:none; border-radius:10px; background:var(--stage-2); color:var(--spotlight); }
 @media (max-width:860px){
   .lobby-layout{ display:block; }
+  .lobby-layout .lobby-zone + .lobby-zone{ margin-top:12px; }
   #menuView.active{ display:flex; flex-direction:column; gap:14px; }
   .menu-intro{ text-align:center; }
   .menu-intro h2{ font-size:clamp(25px,6vw,34px); margin-bottom:6px; }
@@ -687,50 +753,71 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 
     <!-- 2. LOBBY -->
     <div id="lobbyView" class="view">
-      <h2 id="lobbyTitle" style="text-align:center;">Game Lobby</h2>
-
-      <div class="lobby-layout">
-      <div class="lobby-share">
-      <div class="room-code-card" id="roomCodeSection">
-        <div class="room-share-info">
-          <p class="room-share-label">Invite Your Players</p>
-          <div class="room-code-value" translate="no"><button id="roomCodeDisplay" type="button" title="Copy room code" aria-label="Copy room code">-</button></div>
-          <p class="room-share-hint">Share the link, show the QR code, or send the room code.</p>
-          <div class="copy-row">
-            <button class="btn-ghost btn-sm" id="btnCopyCode">📋 Copy Code</button>
-            <button class="btn-ghost btn-sm" id="btnCopyLink">🔗 Copy Join Link</button>
-            <button class="btn-ghost btn-sm" id="btnShareRoom" hidden>↗ Share Room</button>
+      <section class="lobby-game" aria-labelledby="lobbyTitle">
+        <div class="lobby-game-head">
+          <div>
+            <h1 id="lobbyTitle">Rhyme Match</h1>
+            <p>Think fast. Reveal together. Find your rhyme twin.</p>
+            <span class="lobby-mode" id="lobbyModeLabel">🎤 Classic Rhyme</span>
           </div>
+          <button type="button" class="btn-ghost btn-sm" data-open-tutorial>▶ How to Play</button>
         </div>
-        <div class="room-qr" id="roomQrPanel" hidden>
-          <div class="room-qr-code" id="roomQrCode"></div>
-          <p class="room-qr-label">Scan to Join</p>
+        <div id="hostModeSection" style="display:none;">
+          <details class="lobby-settings" id="gameSettings">
+            <summary>⚙ Game Settings</summary>
+            <p class="lobby-settings-note">Only the host can change these. Choose a mode before starting.</p>
+            <div class="lobby-zone-title"><h3>Game Mode</h3><button type="button" class="btn-ghost btn-sm" data-open-tutorial>How to Play</button></div>
+            <div class="mode-grid" id="modeGrid"></div>
+            <h3>Current Rules</h3>
+            <div class="lobby-rule-grid">
+              <div class="lobby-rule"><strong>Rounds</strong><span id="lobbyRoundsRule">Keep playing until the host ends the game.</span></div>
+              <div class="lobby-rule"><strong>Timer</strong><span id="lobbyTimerRule">15 seconds per round</span></div>
+              <div class="lobby-rule"><strong>Target Word</strong>Host chooses or draws a random word.</div>
+            </div>
+            <details class="lobby-advanced"><summary>Advanced Rules</summary><p id="lobbyAdvancedRule">The host reviews answers before points are awarded.</p></details>
+          </details>
         </div>
-      </div>
-
-      <div style="margin:16px 0;">
-        <p style="text-align:center;margin-bottom:8px;" id="playerCount">Connected: 1 / 8</p>
-        <div class="roster" id="playerRoster"></div>
-      </div>
-
-      </div>
-      <div class="lobby-options">
-      <div id="hostModeSection" style="display:none;">
-        <p style="text-align:center;margin-bottom:6px;">Choose a mode</p>
-        <div class="mode-grid" id="modeGrid"></div>
-      </div>
-      <div id="clientModeSection" style="display:none;">
-        <div class="mode-readonly">
-          <span>Mode:</span> <strong id="clientModeLabel">Classic Rhyme</strong>
+        <div id="clientModeSection" class="lobby-settings" style="display:none;">
+          <p>🔒 Host controls · Only the host can change the mode.</p>
+          <p>Current mode: <strong id="clientModeLabel">Classic Rhyme</strong></p>
         </div>
+      </section>
+      <div class="lobby-layout">
+        <section class="lobby-zone" aria-labelledby="playersTitle">
+          <div class="lobby-zone-title"><h2 id="playersTitle">Players</h2><p id="playerCount" aria-live="polite">1 / 8</p></div>
+          <div class="roster" id="playerRoster"></div>
+        </section>
+        <section class="lobby-zone" aria-labelledby="inviteTitle">
+          <h2 id="inviteTitle">Invite Players</h2>
+          <div class="room-code-card" id="roomCodeSection">
+            <div class="room-qr" id="roomQrPanel" hidden>
+              <p class="room-qr-label">Scan to Join</p>
+              <div class="room-qr-code" id="roomQrCode"></div>
+            </div>
+            <p class="room-code-caption">ROOM CODE</p>
+            <div class="room-code-value" translate="no"><button id="roomCodeDisplay" type="button" title="Copy room code" aria-label="Copy room code">-</button></div>
+            <p class="room-copy-feedback" id="roomCodeCopyFeedback" role="status" aria-live="polite">Tap code to copy</p>
+            <div class="copy-row"><button class="btn-ghost btn-sm" id="btnCopyLink">🔗 Copy Join Link</button></div>
+          </div>
+        </section>
       </div>
+      <div class="lobby-actions">
+        <p id="lobbyStatusMessage" role="status" aria-live="polite">🔒 Waiting for 1 more player</p>
+        <div id="hostLobbyControls" style="display:none;"><button id="btnStartRound" class="btn-primary" disabled>Start Game</button></div>
+        <p id="lobbyActionHint">Invite someone using the QR code above.</p>
+      </div>
+    </div>
 
-      <div id="hostLobbyControls" style="display:none; margin-top:6px; text-align:center;">
-        <button id="btnStartRound" class="btn-primary" disabled>Need 2+ Players</button>
-      </div>
-      <p id="lobbyStatusMessage" style="text-align:center;margin-top:10px;">Waiting for players to join...</p>
-      </div>
-      </div>
+    <dialog id="howToPlayDialog" class="tutorial-dialog" aria-labelledby="howToPlayTitle">
+      <div class="tutorial-head"><h2 id="howToPlayTitle">How to Play</h2><button type="button" class="btn-ghost btn-sm" id="btnCloseTutorial" aria-label="Close tutorial">✕</button></div>
+      <p class="tutorial-progress" id="tutorialProgress" aria-live="polite">1 / 5</p>
+      <section class="tutorial-step" data-tutorial-step="0"><div class="tutorial-visual"><span class="stage-eyebrow">TARGET WORD</span><strong class="tutorial-target">MOON</strong></div><p>Think of one word that rhymes with the target.</p></section>
+      <section class="tutorial-step" data-tutorial-step="1" hidden><div class="tutorial-visual"><div class="tutorial-answers"><span class="tutorial-answer">● TUNE</span><span class="tutorial-answer">● SPOON</span><span class="tutorial-answer">● TUNE</span><span class="tutorial-answer">● JUNE</span></div></div><p>Everyone writes their own answer at the same time.</p></section>
+      <section class="tutorial-step" data-tutorial-step="2" hidden><div class="tutorial-visual"><div class="tutorial-answers"><span class="tutorial-answer">🔒 Locked</span><span class="tutorial-answer">🔒 Locked</span><span class="tutorial-answer">🔒 Locked</span><span class="tutorial-answer">🔒 Locked</span></div></div><p>Nobody sees another player's answer until everyone locks in or the timer ends.</p></section>
+      <section class="tutorial-step" data-tutorial-step="3" hidden><div class="tutorial-visual"><div class="tutorial-answers"><span class="tutorial-answer matched">TUNE</span><span class="tutorial-answer matched">TUNE</span><span class="tutorial-answer">SPOON</span><span class="tutorial-answer">JUNE</span></div></div><p>Answers appear together. The host checks that they rhyme, then matching words score.</p></section>
+      <section class="tutorial-step" data-tutorial-step="4" hidden><div class="tutorial-visual"><strong class="tutorial-target">TUNE +3</strong><span>Two players matched · Classic Rhyme</span><strong>→ Next Round</strong></div><p>That's it! Think fast. Find your rhyme twin.</p></section>
+      <div class="tutorial-actions"><button type="button" class="btn-ghost" id="btnTutorialBack">Back</button><button type="button" class="btn-primary" id="btnTutorialNext">Next</button></div>
+    </dialog>
     </div>
 
     <!-- 3. WORD TARGET SETUP (HOST ONLY) -->
@@ -976,25 +1063,25 @@ const QUALITY_WORDS = Array.from(new Set([...WORD_FAMILIES.core, ...Object.keys(
 const MODES = {
   classic: {
     label: "Classic Rhyme", emoji: "🎤", timerSeconds: 15, elimination: false,
-    desc: "Find your rhyme twin. Matching with exactly one other player pays best.",
+    desc: "Match one other player for +3. Larger matching groups get +1.",
     points(matchCount){ if (matchCount === 2) return 3; if (matchCount > 2) return 1; return 0; },
     invalid: -2, timeout: -1
   },
   speed: {
     label: "Speed Round", emoji: "⚡", timerSeconds: 8, elimination: false,
-    desc: "Only 8 seconds on the clock. Every point is doubled — so is every penalty.",
+    desc: "8 seconds to answer. Classic points and penalties are doubled.",
     points(matchCount){ if (matchCount === 2) return 6; if (matchCount > 2) return 2; return 0; },
     invalid: -4, timeout: -2
   },
   lonewolf: {
     label: "Lone Wolf", emoji: "🐺", timerSeconds: 15, elimination: false,
-    desc: "Flip the script: standing completely alone earns the biggest bonus.",
+    desc: "A valid answer nobody else chose gets +4; matching gets +1.",
     points(matchCount){ if (matchCount === 1) return 4; if (matchCount >= 2) return 1; return 0; },
     invalid: -2, timeout: -1
   },
   suddendeath: {
     label: "Sudden Death", emoji: "💀", timerSeconds: 15, elimination: true,
-    desc: "Classic scoring, but the lowest score each round is out. Last one standing wins.",
+    desc: "Classic points. The lowest total is eliminated each round.",
     points(matchCount){ if (matchCount === 2) return 3; if (matchCount > 2) return 1; return 0; },
     invalid: -2, timeout: -1
   }
@@ -1106,7 +1193,7 @@ class UIManager {
 
     const isGameActive = (viewId !== 'menuView' && viewId !== 'lobbyView');
     document.getElementById('statsHeader').style.display = isGameActive ? 'flex' : 'none';
-    document.getElementById('brandHeader').style.display = isGameActive ? 'none' : 'block';
+    document.getElementById('brandHeader').style.display = viewId === 'menuView' ? 'block' : 'none';
     document.getElementById('phaseTracker').style.display = isGameActive ? 'flex' : 'none';
 
     document.getElementById('sidebarView').classList.toggle('active', isGameActive);
@@ -1138,17 +1225,22 @@ class UIManager {
 
   static updateRoster(players){
     const count = players.filter(p => p.connected !== false).length;
-    document.getElementById('playerCount').innerText = `Connected: ${count} / ${MAX_PLAYERS}`;
+    document.getElementById('playerCount').innerText = `${count} / ${MAX_PLAYERS}`;
     document.getElementById('playerRoster').innerHTML = players.map(p => `
-      <span class="player-chip ${p.id === myUid ? 'you' : ''}">
-        ${p.eliminated ? '<span class="avatar">💀</span>' : avatarDot(p.colorIndex)}${escapeHtml(p.name)}${p.connected === false ? ' · offline' : p.pendingNextRound ? ' · next round' : ''}
-      </span>`).join('') + (count < 2 ? '<span class="player-chip waiting-slot" aria-label="Waiting for another player">＋ Waiting for a player</span>' : '');
+      <span class="player-chip ${p.id === myUid ? 'you' : ''} ${p.connected === false ? 'offline' : ''}">
+        <span class="player-presence" aria-hidden="true"></span><span class="player-name">${escapeHtml(p.name)}${p.id === myUid ? ' · You' : ''}${p.connected === false ? ' · offline' : p.pendingNextRound ? ' · next round' : ''}</span>${p.id === hostUid ? '<span class="host-badge">👑 HOST</span>' : ''}
+      </span>`).join('') + (count < MAX_PLAYERS ? '<span class="player-chip waiting-slot"><span class="player-presence" aria-hidden="true"></span><span>Waiting for player…</span></span>' : '');
 
     const startBtn = document.getElementById('btnStartRound');
     if (startBtn){
       startBtn.disabled = count < 2;
-      startBtn.innerText = count < 2 ? "Waiting for 1 More Player" : `Start — Pick Target Word (${count} Players)`;
+      startBtn.innerText = 'Start Game';
     }
+    const missing = Math.max(0, 2 - count);
+    const status = document.getElementById('lobbyStatusMessage');
+    status.textContent = isHost ? (missing ? `🔒 Waiting for ${missing} more ${missing === 1 ? 'player' : 'players'}` : '✓ Ready to play') : (missing ? '🔒 Waiting for more players' : '✓ Ready — waiting for host to start');
+    status.classList.toggle('ready', !missing);
+    document.getElementById('lobbyActionHint').textContent = missing ? 'Invite someone using the QR code above.' : isHost ? 'Everyone is connected. Start when your group is ready.' : 'The host will start the game.';
     UIManager.renderScoreboard(players);
   }
 
@@ -1485,13 +1577,38 @@ syncScoreboardPlacement();
 document.getElementById('fabScoreboard').addEventListener('click', openSheet);
 document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
 
-/* --- Copy room code --- */
-document.getElementById('btnCopyCode').addEventListener('click', async () => {
-  const code = document.getElementById('roomCodeDisplay').innerText;
-  try { await navigator.clipboard.writeText(code); showToast('Room code copied!', 'success'); }
-  catch (e) { showToast('Could not copy — copy it manually.', 'error'); }
+/* --- Copy room code from the code itself. --- */
+document.getElementById('roomCodeDisplay').addEventListener('click', async () => {
+  const code = document.getElementById('roomCodeDisplay').textContent.trim();
+  try {
+    await navigator.clipboard.writeText(code);
+    const feedback = document.getElementById('roomCodeCopyFeedback');
+    feedback.textContent = '✓ Copied!';
+    feedback.classList.add('copied');
+  } catch (e) { showModal('Copy this room code', code); }
 });
-document.getElementById('roomCodeDisplay').addEventListener('click', () => document.getElementById('btnCopyCode').click());
+
+/* --- One short tutorial, opened from the game heading or settings. --- */
+const tutorialDialog = document.getElementById('howToPlayDialog');
+const tutorialSteps = [...tutorialDialog.querySelectorAll('[data-tutorial-step]')];
+let tutorialIndex = 0;
+function showTutorialStep(index){
+  tutorialIndex = Math.max(0, Math.min(index, tutorialSteps.length - 1));
+  tutorialSteps.forEach((step, i) => { step.hidden = i !== tutorialIndex; });
+  document.getElementById('tutorialProgress').textContent = `${tutorialIndex + 1} / ${tutorialSteps.length}`;
+  document.getElementById('btnTutorialBack').hidden = tutorialIndex === 0;
+  document.getElementById('btnTutorialNext').textContent = tutorialIndex === tutorialSteps.length - 1 ? (isHost ? 'Got it — Back to Room' : 'Got it — Join the Room') : 'Next';
+}
+document.querySelectorAll('[data-open-tutorial]').forEach(button => button.addEventListener('click', () => {
+  showTutorialStep(0);
+  tutorialDialog.showModal();
+}));
+document.getElementById('btnCloseTutorial').addEventListener('click', () => tutorialDialog.close());
+document.getElementById('btnTutorialBack').addEventListener('click', () => showTutorialStep(tutorialIndex - 1));
+document.getElementById('btnTutorialNext').addEventListener('click', () => {
+  if (tutorialIndex === tutorialSteps.length - 1) tutorialDialog.close();
+  else showTutorialStep(tutorialIndex + 1);
+});
 
 function normalizeRoomInput(value){
   let candidate = String(value || '').trim();
@@ -1551,13 +1668,6 @@ document.getElementById('btnCopyLink').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(link); showToast('Join link copied!', 'success'); }
   catch(e){ showModal('Share this link', link); }
 });
-const shareRoomBtn = document.getElementById('btnShareRoom');
-if (typeof navigator.share === 'function') shareRoomBtn.hidden = false;
-shareRoomBtn.addEventListener('click', async () => {
-  const code = document.getElementById('roomCodeDisplay').textContent.trim();
-  try { await navigator.share({ title:'Join my Rhyme Match room', text:`Room ${code}`, url:joinUrl(code) }); }
-  catch(error){ if (error.name !== 'AbortError') showToast('Could not open sharing. Use Copy Join Link.', 'error'); }
-});
 const incomingRoom = new URL(window.location.href).searchParams.get('room');
 if (incomingRoom){
   document.getElementById('inputJoinId').value = normalizeRoomInput(incomingRoom);
@@ -1566,6 +1676,13 @@ if (incomingRoom){
 }
 
 /* --- Mode selector (host, lobby) --- */
+function updateLobbyRules(){
+  const mode = MODES[engine.mode] || MODES.classic;
+  document.getElementById('lobbyModeLabel').textContent = `${mode.emoji} ${mode.label}`;
+  document.getElementById('lobbyTimerRule').textContent = `${mode.timerSeconds} seconds per round`;
+  document.getElementById('lobbyRoundsRule').textContent = mode.elimination ? 'Until one player remains.' : 'Keep playing until the host ends the game.';
+  document.getElementById('lobbyAdvancedRule').textContent = mode.elimination ? 'The host reviews rhymes, then the lowest total is eliminated.' : 'The host reviews rhymes before points are awarded.';
+}
 function renderModeGrid(){
   const grid = document.getElementById('modeGrid');
   grid.innerHTML = Object.keys(MODES).map(key => {
@@ -1579,6 +1696,7 @@ function renderModeGrid(){
     </button>`;
   }).join('');
   applyModeTheme(engine.mode);
+  updateLobbyRules();
   document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
   grid.querySelectorAll('.mode-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -1689,6 +1807,9 @@ function showRoomIdentity(code){
   const codeButton = document.getElementById('roomCodeDisplay');
   codeButton.textContent = code;
   codeButton.setAttribute('aria-label', `Copy room code ${code}`);
+  const feedback = document.getElementById('roomCodeCopyFeedback');
+  feedback.textContent = 'Tap code to copy';
+  feedback.classList.remove('copied');
   renderRoomQr(code);
 }
 function roomUrl(code, isRoomHost){
@@ -1842,7 +1963,7 @@ function handleHostCommand(data){
   processedCommands.set(uid, data.seq);
   if (data.type === 'JOIN') registerHostJoin(uid, data);
   else if (connectedGuestUids.has(uid) && data.type === 'PREDICT') registerPrediction(uid, data.pick);
-  else if (connectedGuestUids.has(uid) && data.type === 'SUBMIT_RHYME'){
+  else if (connectedGuestUids.has(uid) && data.type === 'SUBMIT_RHYME' && hostPhase() === 'submitRhymeView'){
     engine.registerSubmission(uid, data.word || '');
     broadcastReadyStatus();
     if (engine.allSubmitted()) openHostJudgingPhase();
@@ -1860,6 +1981,7 @@ function startHostSubscriptions(){
 function broadcastRoster(){
   const list = [...engine.players.values()];
   lastKnownPlayers = list;
+  updateLobbyRules();
   UIManager.updateRoster(list);
   const me = list.find(p => p.id === myUid);
   document.getElementById('clientModeLabel').textContent = MODES[engine.mode].emoji + ' ' + MODES[engine.mode].label;
@@ -1984,6 +2106,7 @@ function handleClientMessage(data, attempt){
     lastKnownPlayers = data.players;
     engine.mode = data.mode || 'classic';
     currentRound = Math.max(1, data.round || 1);
+    updateLobbyRules();
     document.getElementById('hostModeSection').style.display = 'none';
     document.getElementById('clientModeSection').style.display = 'block';
     UIManager.updateRoster(data.players);
@@ -2001,6 +2124,7 @@ function handleClientMessage(data, attempt){
     case 'ROSTER_UPDATE': {
       lastKnownPlayers = data.players;
       engine.mode = data.mode || 'classic';
+      updateLobbyRules();
       document.getElementById('clientModeLabel').textContent = MODES[engine.mode].emoji + ' ' + MODES[engine.mode].label;
       document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
       applyModeTheme(engine.mode);
@@ -2328,10 +2452,13 @@ function startRhymeEntry(targetWord){
     if (timeLeft <= 0) {
       clearInterval(countdownInterval);
       document.getElementById('submitStageCard').classList.remove('time-low');
-      if (!submitBtn.disabled || document.getElementById('inputRhyme').value.trim() === '') {
-        processRhymeSubmission(true);
-      } else {
-        processRhymeSubmission(true);
+      if (!inputEl.disabled) processRhymeSubmission(true);
+      if (isHost && document.getElementById('submitRhymeView').classList.contains('active')){
+        engine.activePlayers().forEach(player => {
+          if (!engine.submissions.has(player.id)) engine.registerSubmission(player.id, '');
+        });
+        broadcastReadyStatus();
+        openHostJudgingPhase();
       }
     }
   }, 1000);
@@ -2347,7 +2474,7 @@ function updateRing(ring, timeLeft, total){
 document.getElementById('btnSubmitRhyme').addEventListener('click', () => processRhymeSubmission(false));
 
 function processRhymeSubmission(isAutoSubmit){
-  clearInterval(countdownInterval);
+  if (!isHost) clearInterval(countdownInterval);
   const rhyme = document.getElementById('inputRhyme').value.trim();
   if (isAutoSubmit && document.getElementById('inputRhyme').disabled) return;
 
@@ -2373,6 +2500,7 @@ function processRhymeSubmission(isAutoSubmit){
 
 /* --- HOST JUDGING PHASE --- */
 function openHostJudgingPhase(){
+  clearInterval(countdownInterval);
   UIManager.showView('judgingView');
   document.getElementById('judgeTargetWord').innerText = engine.targetWord;
   document.getElementById('hostJudgeControls').style.display = 'block';
