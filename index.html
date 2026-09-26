@@ -830,6 +830,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
         <button class="btn-success" id="btnRematch" style="display:none;">Rematch</button>
         <button class="btn-ghost" id="btnReturnLobby" style="display:none;">Return to Lobby</button>
       </div>
+      <p id="resultsWaiting" class="ready-status" role="status" hidden>Waiting for host to continue…</p>
     </div>
   </div>
 
@@ -2031,7 +2032,10 @@ function handleClientMessage(data, attempt){
       if (!document.getElementById('waitingView').classList.contains('active')) openClientJudgingPhase(data.targetWord, data.submissions);
       break;
     case 'ROUND_OVER':
-      if (!document.getElementById('waitingView').classList.contains('active')) displayResults(data.results, data.players, data.eliminatedNames, data.gameOver, data.winnerName);
+      if (!document.getElementById('waitingView').classList.contains('active')){
+        displayResults(data.results, data.players, data.eliminatedNames, data.gameOver, data.winnerName);
+        setConnectionStatus('Connected — round results ready', 'online');
+      }
       else { lastKnownPlayers = data.players; UIManager.updateRoster(data.players); }
       break;
     case 'LOBBY_RETURN':
@@ -2510,6 +2514,7 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
   const chooseBtn = document.getElementById('btnChooseTarget');
   const rematchBtn = document.getElementById('btnRematch');
   const lobbyBtn = document.getElementById('btnReturnLobby');
+  document.getElementById('resultsWaiting').hidden = isHost;
 
   if (isHost) {
     lobbyBtn.style.display = 'inline-block';
