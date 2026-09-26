@@ -697,7 +697,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
       <div class="room-code-card" id="roomCodeSection">
         <div class="room-share-info">
           <p class="room-share-label">Invite Your Players</p>
-          <div class="room-code-value" translate="no"><button id="displayPeerId" type="button" title="Copy room code" aria-label="Copy room code">-</button></div>
+          <div class="room-code-value" translate="no"><button id="roomCodeDisplay" type="button" title="Copy room code" aria-label="Copy room code">-</button></div>
           <p class="room-share-hint">Share the link, show the QR code, or send the room code.</p>
           <div class="copy-row">
             <button class="btn-ghost btn-sm" id="btnCopyCode">📋 Copy Code</button>
@@ -1140,7 +1140,7 @@ class UIManager {
     const count = players.filter(p => p.connected !== false).length;
     document.getElementById('playerCount').innerText = `Connected: ${count} / ${MAX_PLAYERS}`;
     document.getElementById('playerRoster').innerHTML = players.map(p => `
-      <span class="player-chip ${p.id === myPeerId ? 'you' : ''}">
+      <span class="player-chip ${p.id === myUid ? 'you' : ''}">
         ${p.eliminated ? '<span class="avatar">💀</span>' : avatarDot(p.colorIndex)}${escapeHtml(p.name)}${p.connected === false ? ' · offline' : p.pendingNextRound ? ' · next round' : ''}
       </span>`).join('') + (count < 2 ? '<span class="player-chip waiting-slot" aria-label="Waiting for another player">＋ Waiting for a player</span>' : '');
 
@@ -1156,8 +1156,8 @@ class UIManager {
     const sorted = ResultsRanking.build(players).standings;
     const podiumHtml = UIManager.buildPodium(sorted);
     const listHtml = sorted.map((p,i) => `
-      <li data-player-id="${escapeHtml(p.id)}" class="${p.eliminated ? 'eliminated' : ''} ${p.id === myPeerId ? 'you' : ''}">
-        <span class="score-player"><span class="rank">${i+1}.</span>${p.eliminated ? '<span aria-label="Eliminated">💀</span>' : avatarDot(p.colorIndex)}<span class="score-name">${escapeHtml(p.name)}</span>${p.id === myPeerId ? '<small class="you-tag">YOU</small>' : ''}</span>
+      <li data-player-id="${escapeHtml(p.id)}" class="${p.eliminated ? 'eliminated' : ''} ${p.id === myUid ? 'you' : ''}">
+        <span class="score-player"><span class="rank">${i+1}.</span>${p.eliminated ? '<span aria-label="Eliminated">💀</span>' : avatarDot(p.colorIndex)}<span class="score-name">${escapeHtml(p.name)}</span>${p.id === myUid ? '<small class="you-tag">YOU</small>' : ''}</span>
         <span class="score-values"><b>${p.score}</b>${p.lastDelta == null ? '' : `<small class="score-delta ${p.lastDelta > 0 ? 'positive' : p.lastDelta < 0 ? 'negative' : 'neutral'}" aria-label="Last round ${formatDelta(p.lastDelta)}">${formatDelta(p.lastDelta)}</small>`}</span>
       </li>`).join('');
     document.getElementById('sidebarPodium').innerHTML = podiumHtml;
@@ -1184,7 +1184,7 @@ class UIManager {
     const order = [1,0,2].filter(i => sorted[i]); // silver, gold, bronze visual order
     const slotClass = { 0:'first', 1:'second', 2:'third' };
     return `<div class="podium">${order.map(i => `
-      <div class="podium-slot ${slotClass[i]} ${sorted[i].id === myPeerId ? 'you' : ''} ${sorted[i].eliminated ? 'eliminated' : ''}">
+      <div class="podium-slot ${slotClass[i]} ${sorted[i].id === myUid ? 'you' : ''} ${sorted[i].eliminated ? 'eliminated' : ''}">
         <div class="podium-medal">${medals[i]}</div>
         <div class="podium-bar"></div>
         <div class="podium-name">${avatarDot(sorted[i].colorIndex)}${escapeHtml(sorted[i].name)}<br>${sorted[i].score}</div>
@@ -1366,9 +1366,8 @@ class RhymeGameEngine {
    ============================================================ */
 const engine = new RhymeGameEngine();
 let isHost = false;
-let hostConn = null;
 let localName = "";
-let myPeerId = "";
+let myUid = "";
 let localScore = 0;
 let currentRound = 1;
 let currentTimerSeconds = 15;
@@ -1396,11 +1395,11 @@ document.getElementById('btnRetryConnection').addEventListener('click', () => {
   if (isHost){
     if (roomRef) roomRef.child('meta').once('value').then(() => queuePersist()).catch(error => reportRoomError(error, 'service'));
     else document.getElementById('btnHostInit').click();
-  } else if (roomRef && hostConn){
+  } else if (roomRef){
     roomRef.child('snapshot').once('value').then(snap => {
       clientNeedsSync = true;
       if (clientJoined) syncClientSnapshot(snap.val());
-      else hostConn.send({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
+      else sendGuestCommand({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
     }).catch(error => reportRoomError(error, 'service'));
   } else document.getElementById('btnJoinInit').click();
 });
@@ -1419,9 +1418,8 @@ function broadcastReadyStatus(){
   const total = engine.activePlayers().length;
   const ready = engine.activePlayers().filter(p => engine.submissions.has(p.id)).length;
   updateReadyStatus(ready, total);
-  connections.forEach(c => sendHost(c, { type:'READY_STATUS', ready, total }));
+  broadcastToGuests({ type:'READY_STATUS', ready, total });
 }
-const connections = new Map();
 
 function getValidatedName(){
   const input = document.getElementById('inputPlayerName');
@@ -1483,11 +1481,11 @@ document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
 
 /* --- Copy room code --- */
 document.getElementById('btnCopyCode').addEventListener('click', async () => {
-  const code = document.getElementById('displayPeerId').innerText;
+  const code = document.getElementById('roomCodeDisplay').innerText;
   try { await navigator.clipboard.writeText(code); showToast('Room code copied!', 'success'); }
   catch (e) { showToast('Could not copy — copy it manually.', 'error'); }
 });
-document.getElementById('displayPeerId').addEventListener('click', () => document.getElementById('btnCopyCode').click());
+document.getElementById('roomCodeDisplay').addEventListener('click', () => document.getElementById('btnCopyCode').click());
 
 function normalizeRoomInput(value){
   let candidate = String(value || '').trim();
@@ -1543,14 +1541,14 @@ function renderRoomQr(code){
 }
 document.getElementById('btnCopyLink').addEventListener('click', async () => {
   if (window.location.protocol === 'file:'){ showModal('Publish to share a link', 'Open this game from an HTTPS website to share a join link across devices. For now, share the room code.'); return; }
-  const link = joinUrl(document.getElementById('displayPeerId').textContent.trim());
+  const link = joinUrl(document.getElementById('roomCodeDisplay').textContent.trim());
   try { await navigator.clipboard.writeText(link); showToast('Join link copied!', 'success'); }
   catch(e){ showModal('Share this link', link); }
 });
 const shareRoomBtn = document.getElementById('btnShareRoom');
 if (typeof navigator.share === 'function') shareRoomBtn.hidden = false;
 shareRoomBtn.addEventListener('click', async () => {
-  const code = document.getElementById('displayPeerId').textContent.trim();
+  const code = document.getElementById('roomCodeDisplay').textContent.trim();
   try { await navigator.share({ title:'Join my Rhyme Match room', text:`Room ${code}`, url:joinUrl(code) }); }
   catch(error){ if (error.name !== 'AbortError') showToast('Could not open sharing. Use Copy Join Link.', 'error'); }
 });
@@ -1587,8 +1585,7 @@ function renderModeGrid(){
 }
 
 /* --- Firebase rooms: hosted discovery, persisted state, and resumable clients. --- */
-const registeredConnections = new Set();
-const connectionHealth = new Map();
+const connectedGuestUids = new Set();
 let hostSessionId = '';
 let hostStarting = false;
 let clientAttempt = 0;
@@ -1662,7 +1659,7 @@ async function ensureFirebase(){
   }
   const credential = await auth.signInAnonymously();
   roomUser = credential.user;
-  myPeerId = roomUser.uid;
+  myUid = roomUser.uid;
   return roomUser;
 }
 function nextCommandSeq(){
@@ -1683,7 +1680,7 @@ function showWaitingForNextRound(message){
   document.getElementById('waitingRoomStatus').textContent = message || 'Connected to the same room; waiting for the next round.';
 }
 function showRoomIdentity(code){
-  const codeButton = document.getElementById('displayPeerId');
+  const codeButton = document.getElementById('roomCodeDisplay');
   codeButton.textContent = code;
   codeButton.setAttribute('aria-label', `Copy room code ${code}`);
   renderRoomQr(code);
@@ -1697,7 +1694,7 @@ function roomUrl(code, isRoomHost){
 }
 async function setPresence(){
   if (!roomRef || !database || !localConnectionId) return;
-  const root = isHost ? roomRef.child('hostConnections') : roomRef.child('presence').child(myPeerId);
+  const root = isHost ? roomRef.child('hostConnections') : roomRef.child('presence').child(myUid);
   const ref = root.child(localConnectionId);
   await ref.onDisconnect().remove();
   await ref.set({ at:firebase.database.ServerValue.TIMESTAMP });
@@ -1710,7 +1707,7 @@ function bindConnectionMonitor(){
       setPresence().catch(error => reportRoomError(error, 'presence'));
       if (wasConnected === false && clientJoined && !isHost){
         clientNeedsSync = true;
-        hostConn.send({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
+        sendGuestCommand({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
         if (lastPublicSnapshot) syncClientSnapshot(lastPublicSnapshot);
       }
       if (isHost || clientJoined) setConnectionStatus('Connected to room service', 'online');
@@ -1748,12 +1745,10 @@ function restoreHostState(state){
   (state.processedCommands || []).forEach(([id, seq]) => processedCommands.set(id, seq));
   lastResultsPacket = state.results || null;
   currentRound = Math.max(1, engine.round);
-  registeredConnections.clear();
-  connections.clear();
+  connectedGuestUids.clear();
   engine.players.forEach(player => {
-    if (player.id !== myPeerId && player.connected !== false){
-      registeredConnections.add(player.id);
-      connections.set(player.id, virtualConnection(player.id));
+    if (player.id !== myUid && player.connected !== false){
+      connectedGuestUids.add(player.id);
     }
   });
 }
@@ -1777,25 +1772,27 @@ function queuePersist(){
     ])).catch(error => reportRoomError(error, 'save'));
   }, 0);
 }
-function virtualConnection(uid){
-  return { peer:uid, open:true, send:payload => sendHost({ peer:uid, open:true }, payload) };
-}
-function sendHost(conn, payload){
-  if (!isHost || !roomRef || !conn || !conn.peer) return;
+function writeGuestMessage(uid, payload){
+  if (!isHost || !roomRef || !uid) return;
   hostEventSeq = Math.max(Date.now() * 1000, hostEventSeq + 1);
   const message = { ...payload, roomId:roomCode, hostId:hostUid, hostSessionId, seq:hostEventSeq };
-  roomRef.child('messages').child(conn.peer).set(message).catch(error => reportRoomError(error, 'send'));
+  roomRef.child('messages').child(uid).set(message).catch(error => reportRoomError(error, 'send'));
   queuePersist();
 }
-async function sendClient(payload){
+function broadcastToGuests(payload){
+  connectedGuestUids.forEach(uid => writeGuestMessage(uid, payload));
+}
+async function writeGuestCommand(payload){
   if (!roomRef || !roomUser) throw { code:'room-not-found' };
-  const command = { ...payload, uid:myPeerId, seq:nextCommandSeq(), at:firebase.database.ServerValue.TIMESTAMP };
-  await roomRef.child('commands').child(myPeerId).set(command);
+  const command = { ...payload, uid:myUid, seq:nextCommandSeq(), at:firebase.database.ServerValue.TIMESTAMP };
+  await roomRef.child('commands').child(myUid).set(command);
+}
+function sendGuestCommand(payload){
+  writeGuestCommand(payload).catch(error => reportRoomError(error, 'send'));
 }
 function markConnectionLost(uid, reason){
-  if (!registeredConnections.has(uid)) return;
-  registeredConnections.delete(uid);
-  connections.delete(uid);
+  if (!connectedGuestUids.has(uid)) return;
+  connectedGuestUids.delete(uid);
   const changed = engine.markDisconnected(uid);
   if (!changed) return;
   console.info('Rhyme Match player disconnected', { uid, reason });
@@ -1805,26 +1802,24 @@ function markConnectionLost(uid, reason){
     broadcastReadyStatus();
     if (engine.allSubmitted()) openHostJudgingPhase();
   }
-  setConnectionStatus(registeredConnections.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
+  setConnectionStatus(connectedGuestUids.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
 }
 function registerHostJoin(uid, data){
   if (!data.sessionId || !/^[A-Za-z0-9-]{16,80}$/.test(data.sessionId)){
-    sendHost(virtualConnection(uid), { type:'ERROR', code:'invalid-session' }); return;
+    writeGuestMessage(uid, { type:'ERROR', code:'invalid-session' }); return;
   }
   let player = engine.players.get(uid);
   if (!player){
     const connected = [...engine.players.values()].filter(p => p.connected !== false).length;
-    if (connected >= MAX_PLAYERS){ sendHost(virtualConnection(uid), { type:'ERROR', code:'room-full' }); return; }
+    if (connected >= MAX_PLAYERS){ writeGuestMessage(uid, { type:'ERROR', code:'room-full' }); return; }
     engine.addPlayer(uid, String(data.name || 'Player').trim().slice(0,15) || 'Player');
     player = engine.players.get(uid);
   }
   player.connected = true;
   player.sessionId = data.sessionId;
   player.pendingNextRound = !['lobbyView','targetSetupView'].includes(hostPhase());
-  const conn = virtualConnection(uid);
-  registeredConnections.add(uid);
-  connections.set(uid, conn);
-  sendHost(conn, {
+  connectedGuestUids.add(uid);
+  writeGuestMessage(uid, {
     type:'ROOM_STATE', playerId:uid, clientSessionId:data.sessionId,
     players:[...engine.players.values()], mode:engine.mode, round:engine.round,
     phase:hostPhase(), waiting:player.pendingNextRound
@@ -1840,8 +1835,8 @@ function handleHostCommand(data){
   if (data.seq <= (processedCommands.get(uid) || 0)) return;
   processedCommands.set(uid, data.seq);
   if (data.type === 'JOIN') registerHostJoin(uid, data);
-  else if (registeredConnections.has(uid) && data.type === 'PREDICT') registerPrediction(uid, data.pick);
-  else if (registeredConnections.has(uid) && data.type === 'SUBMIT_RHYME'){
+  else if (connectedGuestUids.has(uid) && data.type === 'PREDICT') registerPrediction(uid, data.pick);
+  else if (connectedGuestUids.has(uid) && data.type === 'SUBMIT_RHYME'){
     engine.registerSubmission(uid, data.word || '');
     broadcastReadyStatus();
     if (engine.allSubmitted()) openHostJudgingPhase();
@@ -1853,19 +1848,19 @@ function startHostSubscriptions(){
   subscribe(roomRef.child('commands'), 'child_changed', snap => handleHostCommand(snap.val()), error => reportRoomError(error, 'commands'));
   subscribe(roomRef.child('presence'), 'value', snap => {
     const all = snap.val() || {};
-    for (const uid of [...registeredConnections]) if (!all[uid] || !Object.keys(all[uid]).length) markConnectionLost(uid, 'presence-lost');
+    for (const uid of [...connectedGuestUids]) if (!all[uid] || !Object.keys(all[uid]).length) markConnectionLost(uid, 'presence-lost');
   }, error => reportRoomError(error, 'presence'));
 }
 function broadcastRoster(){
   const list = [...engine.players.values()];
   lastKnownPlayers = list;
   UIManager.updateRoster(list);
-  const me = list.find(p => p.id === myPeerId);
+  const me = list.find(p => p.id === myUid);
   document.getElementById('clientModeLabel').textContent = MODES[engine.mode].emoji + ' ' + MODES[engine.mode].label;
   document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
   applyModeTheme(engine.mode);
   if (isHost && document.getElementById('lobbyView').classList.contains('active')) UIManager.updateHeader(currentRound, me ? me.score : 0, engine.mode, me ? me.eliminated : false);
-  connections.forEach(c => sendHost(c, { type:'ROSTER_UPDATE', players:list, mode:engine.mode }));
+  broadcastToGuests({ type:'ROSTER_UPDATE', players:list, mode:engine.mode });
   queuePersist();
 }
 function resumeHostView(state){
@@ -1898,18 +1893,18 @@ async function startHost(){
     isHost = true;
     localName = requestedName;
     rememberName(localName);
-    hostUid = myPeerId;
+    hostUid = myUid;
     localConnectionId = roomRandomId();
     if (incomingHost && validRoomCode(incomingHost.toUpperCase())){
       roomCode = incomingHost.toUpperCase();
       roomRef = database.ref('rooms/' + roomCode);
       const [metaSnap, stateSnap] = await Promise.all([roomRef.child('meta').once('value'), roomRef.child('hostState').once('value')]);
       const meta = metaSnap.val();
-      if (!meta || meta.hostUid !== myPeerId) throw { code:'permission-denied' };
+      if (!meta || meta.hostUid !== myUid) throw { code:'permission-denied' };
       hostSessionId = meta.hostSessionId;
       restoreHostState(stateSnap.val() || {});
-      if (!engine.players.has(myPeerId)) engine.addPlayer(myPeerId, localName);
-      else engine.players.get(myPeerId).connected = true;
+      if (!engine.players.has(myUid)) engine.addPlayer(myUid, localName);
+      else engine.players.get(myUid).connected = true;
       showRoomIdentity(roomCode);
       resumeHostView(stateSnap.val() || {});
     } else {
@@ -1918,11 +1913,11 @@ async function startHost(){
       const existing = await roomRef.child('meta').once('value');
       if (existing.exists()) throw { code:'room-code-collision' };
       hostSessionId = roomRandomId();
-      engine.addPlayer(myPeerId, localName);
-      engine.players.get(myPeerId).sessionId = hostSessionId;
+      engine.addPlayer(myUid, localName);
+      engine.players.get(myUid).sessionId = hostSessionId;
       await roomRef.set({
-        meta:{ hostUid:myPeerId, hostSessionId, createdAt:firebase.database.ServerValue.TIMESTAMP, expiresAt:Date.now()+ROOM_LIFETIME_MS },
-        snapshot:{ roomId:roomCode, hostUid:myPeerId, hostSessionId, phase:'lobbyView', round:0, mode:engine.mode, players:[...engine.players.values()] },
+        meta:{ hostUid:myUid, hostSessionId, createdAt:firebase.database.ServerValue.TIMESTAMP, expiresAt:Date.now()+ROOM_LIFETIME_MS },
+        snapshot:{ roomId:roomCode, hostUid:myUid, hostSessionId, phase:'lobbyView', round:0, mode:engine.mode, players:[...engine.players.values()] },
         hostState:serializeHostState()
       });
       history.replaceState(null, '', roomUrl(roomCode, true));
@@ -1936,7 +1931,7 @@ async function startHost(){
     }
     bindConnectionMonitor();
     startHostSubscriptions();
-    setConnectionStatus(registeredConnections.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
+    setConnectionStatus(connectedGuestUids.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
   } catch(error){
     reportRoomError(error, 'host-start');
     roomRef = null;
@@ -1953,7 +1948,7 @@ function syncClientSnapshot(snapshot){
   engine.mode = snapshot.mode || 'classic';
   currentRound = Math.max(1, snapshot.round || 1);
   UIManager.updateRoster(lastKnownPlayers);
-  const me = lastKnownPlayers.find(p => p.id === myPeerId);
+  const me = lastKnownPlayers.find(p => p.id === myUid);
   if (me){ localScore = me.score; UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated); }
   if (!clientNeedsSync) return;
   clientNeedsSync = false;
@@ -1973,7 +1968,7 @@ function handleClientMessage(data, attempt){
     return;
   }
   if (data.type === 'ROOM_STATE'){
-    if (data.playerId !== myPeerId || data.clientSessionId !== localSessionId(roomCode) || data.hostSessionId !== joinedHostSessionId || !Array.isArray(data.players) || !data.players.some(p => p.id === myPeerId)){
+    if (data.playerId !== myUid || data.clientSessionId !== localSessionId(roomCode) || data.hostSessionId !== joinedHostSessionId || !Array.isArray(data.players) || !data.players.some(p => p.id === myUid)){
       reportRoomError({ code:'identity-mismatch' }, 'identity'); return;
     }
     clearTimeout(clientJoinTimer);
@@ -1986,7 +1981,7 @@ function handleClientMessage(data, attempt){
     document.getElementById('hostModeSection').style.display = 'none';
     document.getElementById('clientModeSection').style.display = 'block';
     UIManager.updateRoster(data.players);
-    const me = data.players.find(p => p.id === myPeerId);
+    const me = data.players.find(p => p.id === myUid);
     localScore = me.score;
     UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated);
     if (data.waiting) showWaitingForNextRound();
@@ -2004,7 +1999,7 @@ function handleClientMessage(data, attempt){
       document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
       applyModeTheme(engine.mode);
       UIManager.updateRoster(data.players);
-      const me = data.players.find(p => p.id === myPeerId);
+      const me = data.players.find(p => p.id === myUid);
       if (me){ localScore = me.score; UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated); }
       break;
     }
@@ -2012,7 +2007,7 @@ function handleClientMessage(data, attempt){
       currentRound = data.round;
       currentTimerSeconds = data.timerSeconds;
       engine.mode = data.mode;
-      const me = lastKnownPlayers.find(p => p.id === myPeerId);
+      const me = lastKnownPlayers.find(p => p.id === myUid);
       if (me && me.pendingNextRound){ showWaitingForNextRound(); break; }
       setConnectionStatus('Connected — round in progress', 'online');
       if (me && me.eliminated) startSpectating(data.targetWord);
@@ -2020,7 +2015,7 @@ function handleClientMessage(data, attempt){
       break;
     }
     case 'VOTE_START': {
-      const me = data.players.find(p => p.id === myPeerId);
+      const me = data.players.find(p => p.id === myUid);
       if (me && me.pendingNextRound){ showWaitingForNextRound(); break; }
       showVote(data.players, data.round);
       break;
@@ -2067,15 +2062,14 @@ async function startClient(){
     const metaSnap = await roomRef.child('meta').once('value');
     const meta = metaSnap.val();
     if (!meta || meta.expiresAt < Date.now()) throw { code:'room-not-found' };
-    if (meta.hostUid === myPeerId) throw { code:'same-browser-host' };
+    if (meta.hostUid === myUid) throw { code:'same-browser-host' };
     hostUid = meta.hostUid;
     joinedHostSessionId = meta.hostSessionId;
     localConnectionId = roomRandomId();
     showRoomIdentity(roomCode);
-    const existingMessage = await roomRef.child('messages').child(myPeerId).once('value');
+    const existingMessage = await roomRef.child('messages').child(myUid).once('value');
     lastEventSeq = existingMessage.val()?.seq || 0;
-    hostConn = { open:true, send:payload => sendClient(payload).catch(error => reportRoomError(error, 'send')) };
-    subscribe(roomRef.child('messages').child(myPeerId), 'value', snap => handleClientMessage(snap.val(), attempt), error => reportRoomError(error, 'messages'));
+    subscribe(roomRef.child('messages').child(myUid), 'value', snap => handleClientMessage(snap.val(), attempt), error => reportRoomError(error, 'messages'));
     subscribe(roomRef.child('snapshot'), 'value', snap => {
       lastPublicSnapshot = snap.val();
       if (clientJoined) syncClientSnapshot(lastPublicSnapshot);
@@ -2089,7 +2083,7 @@ async function startClient(){
     });
     bindConnectionMonitor();
     await setPresence();
-    await sendClient({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
+    await writeGuestCommand({ type:'JOIN', name:localName, sessionId:localSessionId(roomCode) });
     clientJoinTimer = setTimeout(() => {
       if (clientJoined || attempt !== clientAttempt) return;
       setJoinBusy(false);
@@ -2103,7 +2097,6 @@ async function startClient(){
     if (attempt !== clientAttempt) return;
     clearSubscriptions();
     roomRef = null;
-    hostConn = null;
     setJoinBusy(false);
     reportRoomError(error, 'lookup');
   }
@@ -2125,10 +2118,10 @@ if (incomingHost && validRoomCode(incomingHost.toUpperCase())){
 function showVote(players, round){
   UIManager.showView('voteView');
   const active = players.filter(p => !p.eliminated && p.connected !== false && !p.pendingNextRound);
-  const me = players.find(p => p.id === myPeerId);
+  const me = players.find(p => p.id === myUid);
   document.getElementById('votePrompt').textContent = `Pick the player you expect to match with YOU most often from rounds ${round}–${round + 4}. Correct: +${active.length}. Wrong: −${Math.ceil(active.length / 2)}. Skip: 0. Tied top partners count; no matches means no winner.`;
   const choices = document.getElementById('voteChoices');
-  choices.innerHTML = active.filter(p => p.id !== myPeerId).map(p => `<button class="btn-ghost" data-pick="${escapeHtml(p.id)}">${avatarDot(p.colorIndex)}${escapeHtml(p.name)}</button>`).join('');
+  choices.innerHTML = active.filter(p => p.id !== myUid).map(p => `<button class="btn-ghost" data-pick="${escapeHtml(p.id)}">${avatarDot(p.colorIndex)}${escapeHtml(p.name)}</button>`).join('');
   choices.querySelectorAll('button').forEach(button => button.addEventListener('click', () => submitPrediction(button.dataset.pick)));
   document.getElementById('btnSkipVote').disabled = !!(me && me.eliminated);
   if (me && me.eliminated){
@@ -2140,8 +2133,8 @@ function showVote(players, round){
 function submitPrediction(pick){
   document.querySelectorAll('#voteChoices button').forEach(b => b.disabled = true);
   document.getElementById('btnSkipVote').disabled = true;
-  if (isHost) registerPrediction(myPeerId, pick);
-  else hostConn.send({ type:'PREDICT', pick });
+  if (isHost) registerPrediction(myUid, pick);
+  else sendGuestCommand({ type:'PREDICT', pick });
   document.getElementById('voteStatus').textContent = 'Prediction locked — waiting for others…';
 }
 document.getElementById('btnSkipVote').addEventListener('click', () => submitPrediction(null));
@@ -2149,7 +2142,7 @@ function broadcastVoteStatus(){
   const active = engine.activePlayers();
   const ready = active.filter(p => engine.predictions.has(p.id)).length;
   document.getElementById('voteStatus').textContent = `${ready} / ${active.length} predictions in`;
-  connections.forEach(c => sendHost(c, { type:'VOTE_STATUS', ready, total:active.length }));
+  broadcastToGuests({ type:'VOTE_STATUS', ready, total:active.length });
   if (ready === active.length && ready > 0 && !voteTransitionPending){
     voteTransitionPending = true;
     setTimeout(() => {
@@ -2178,7 +2171,7 @@ function startNextRound(action){
     engine.predictionCounts = new Map(engine.activePlayers().map(p => [p.id, new Map()]));
     const players = Array.from(engine.players.values());
     showVote(players, engine.predictionRound);
-    connections.forEach(c => sendHost(c, { type:'VOTE_START', players, round:engine.predictionRound }));
+    broadcastToGuests({ type:'VOTE_START', players, round:engine.predictionRound });
     broadcastVoteStatus();
   } else if (action === 'choose') document.getElementById('btnStartRound').click();
   else startQuickRound();
@@ -2187,7 +2180,7 @@ function startQuickRound(){
   engine.initRound(pickTarget());
   currentRound = engine.round;
   currentTimerSeconds = MODES[engine.mode].timerSeconds;
-  connections.forEach(c => sendHost(c, { type:'START_RHYME_PHASE', targetWord:engine.targetWord, round:engine.round, mode:engine.mode, timerSeconds:currentTimerSeconds }));
+  broadcastToGuests({ type:'START_RHYME_PHASE', targetWord:engine.targetWord, round:engine.round, mode:engine.mode, timerSeconds:currentTimerSeconds });
   startRhymeEntry(engine.targetWord);
 }
 function settlePredictionResults(results){
@@ -2270,13 +2263,13 @@ document.getElementById('btnConfirmTarget').addEventListener('click', () => {
 
   engine.promoteWaiting();
   broadcastRoster();
-  connections.forEach(c => sendHost(c, { type:'START_RHYME_PHASE', targetWord: engine.targetWord, round: engine.round, mode: engine.mode, timerSeconds: currentTimerSeconds }));
+  broadcastToGuests({ type:'START_RHYME_PHASE', targetWord: engine.targetWord, round: engine.round, mode: engine.mode, timerSeconds: currentTimerSeconds });
   startRhymeEntry(engine.targetWord);
 });
 
 /* --- SPECTATOR (eliminated players) --- */
 function startSpectating(targetWord){
-  const me = lastKnownPlayers.find(p => p.id === myPeerId);
+  const me = lastKnownPlayers.find(p => p.id === myUid);
   UIManager.updateHeader(currentRound, me ? me.score : localScore, engine.mode, true);
   UIManager.showView('spectatorView');
   document.getElementById('spectatorTargetWord').textContent = 'Target word: ' + targetWord;
@@ -2285,7 +2278,7 @@ function startSpectating(targetWord){
 /* --- RHYME SUBMISSION & TIMER --- */
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 function startRhymeEntry(targetWord){
-  const me = lastKnownPlayers.find(p => p.id === myPeerId);
+  const me = lastKnownPlayers.find(p => p.id === myUid);
   UIManager.updateHeader(currentRound, me ? me.score : localScore, engine.mode, false);
   UIManager.showView('submitRhymeView');
   document.getElementById('displayTargetWord').innerText = targetWord;
@@ -2361,11 +2354,11 @@ function processRhymeSubmission(isAutoSubmit){
   msgEl.style.display = 'block';
 
   if (isHost) {
-    engine.registerSubmission(myPeerId, rhyme);
+    engine.registerSubmission(myUid, rhyme);
     broadcastReadyStatus();
     if (engine.allSubmitted()) openHostJudgingPhase();
   } else {
-    hostConn.send({ type:'SUBMIT_RHYME', word: rhyme });
+    sendGuestCommand({ type:'SUBMIT_RHYME', word: rhyme });
   }
 }
 
@@ -2382,7 +2375,7 @@ function openHostJudgingPhase(){
   const payload = Array.from(engine.submissions.entries()).map(([id, s]) => ({
     name: engine.players.get(id).name, word: s.word, timeout: s.timeout, colorIndex: engine.players.get(id).colorIndex
   }));
-  connections.forEach(c => sendHost(c, { type:'JUDGING_PHASE', targetWord: engine.targetWord, submissions: payload }));
+  broadcastToGuests({ type:'JUDGING_PHASE', targetWord: engine.targetWord, submissions: payload });
 }
 
 function renderHostJudgeItems(){
@@ -2441,7 +2434,7 @@ document.getElementById('btnFinalizeScores').addEventListener('click', () => {
 
   Sound.reveal();
   displayResults(results, playersSnapshot, elim.eliminatedNames, elim.gameOver, elim.winnerName);
-  connections.forEach(c => sendHost(c, { type:'ROUND_OVER', results, players: playersSnapshot, eliminatedNames: elim.eliminatedNames, gameOver: elim.gameOver, winnerName: elim.winnerName }));
+  broadcastToGuests({ type:'ROUND_OVER', results, players: playersSnapshot, eliminatedNames: elim.eliminatedNames, gameOver: elim.gameOver, winnerName: elim.winnerName });
 });
 
 /* --- RESULTS DISPLAY --- */
@@ -2457,7 +2450,7 @@ function buildHeadline(results){
 }
 
 function displayResults(results, players, eliminatedNames, gameOver, winnerName){
-  const me = players.find(p => p.id === myPeerId);
+  const me = players.find(p => p.id === myUid);
   if (me) { localScore = me.score; UIManager.updateHeader(results.round, localScore, results.mode || engine.mode, me.eliminated); }
   lastKnownPlayers = players;
 
@@ -2466,7 +2459,7 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
 
   const ranking = ResultsRanking.build(players);
   const submissions = new Map((results.submissions || []).map(submission => [submission.id, submission]));
-  const myStanding = ranking.round.find(row => row.player.id === myPeerId);
+  const myStanding = ranking.round.find(row => row.player.id === myUid);
   let html = '<div class="round-story">';
   if (gameOver && winnerName) html += `<div class="winner-banner"><span class="trophy" aria-hidden="true">🏆</span><div>Champion</div><div class="winner-name">${escapeHtml(winnerName)}</div></div>`;
   html += `<div class="headline-banner">${escapeHtml(buildHeadline(results))}</div>`;
@@ -2489,16 +2482,16 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
     const predictionDelta = sub ? delta - (Number(sub.pointsEarned) || 0) : 0;
     if (predictionDelta) word += ` · prediction ${formatDelta(predictionDelta)}`;
     const tone = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
-    html += `<div class="round-rank-row ${tone} ${row.roundRank <= 3 ? 'top-three' : ''} ${p.id === myPeerId ? 'you' : ''} ${sub?.outOfGame ? 'out' : ''}">
+    html += `<div class="round-rank-row ${tone} ${row.roundRank <= 3 ? 'top-three' : ''} ${p.id === myUid ? 'you' : ''} ${sub?.outOfGame ? 'out' : ''}">
       <span class="rank-movement ${row.movement > 0 ? 'up' : row.movement < 0 ? 'down' : ''}" aria-label="${movementLabel}"><strong>${movement}</strong><span>rank</span></span>
-      <span class="round-player"><span class="round-player-name">${avatarDot(p.colorIndex)}${escapeHtml(p.name)}${p.id === myPeerId ? '<span class="you-tag">YOU</span>' : ''}</span><span class="round-player-detail">${word}</span></span>
+      <span class="round-player"><span class="round-player-name">${avatarDot(p.colorIndex)}${escapeHtml(p.name)}${p.id === myUid ? '<span class="you-tag">YOU</span>' : ''}</span><span class="round-player-detail">${word}</span></span>
       <span class="round-score ${tone}"><strong>${formatDelta(delta)}</strong><small>→ ${p.score} total</small></span>
     </div>`;
   });
   html += '</div></section>';
   const topThree = ranking.standings.slice(0, 3);
-  html += `<section class="standings-snapshot" aria-label="Current standings"><h3>Current Standings</h3><div class="standings-chips">${topThree.map((p, i) => `<span class="standings-chip ${p.id === myPeerId ? 'you' : ''}">${i + 1}. ${avatarDot(p.colorIndex)}${escapeHtml(p.name)} ${p.score}</span>`).join('')}</div>`;
-  if (myStanding) html += `<p class="standings-summary">${ranking.standings[0].id === myPeerId ? 'You lead' : `${escapeHtml(ranking.standings[0].name)} leads`} with ${ranking.standings[0].score} · You are #${myStanding.currentRank} with ${myStanding.player.score}.</p>`;
+  html += `<section class="standings-snapshot" aria-label="Current standings"><h3>Current Standings</h3><div class="standings-chips">${topThree.map((p, i) => `<span class="standings-chip ${p.id === myUid ? 'you' : ''}">${i + 1}. ${avatarDot(p.colorIndex)}${escapeHtml(p.name)} ${p.score}</span>`).join('')}</div>`;
+  if (myStanding) html += `<p class="standings-summary">${ranking.standings[0].id === myUid ? 'You lead' : `${escapeHtml(ranking.standings[0].name)} leads`} with ${ranking.standings[0].score} · You are #${myStanding.currentRank} with ${myStanding.player.score}.</p>`;
   html += '</section>';
   if (results.voteProgress) html += `<p class="standings-summary">🔮 Your partner prediction settles after round ${results.voteProgress}.</p>`;
   if (results.voteResults?.length) html += `<details class="prediction-details"><summary>Prediction Results</summary>${results.voteResults.map(v => `<p>${escapeHtml(v.voterName)}: ${v.pickName ? escapeHtml(v.pickName) + ' (' + v.matches + ' matches)' : 'skipped'} · ${formatDelta(v.delta)}</p>`).join('')}</details>`;
@@ -2546,7 +2539,7 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
       broadcastRoster();
       engine.promoteWaiting();
       broadcastRoster();
-      connections.forEach(c => sendHost(c, { type:'LOBBY_RETURN' }));
+      broadcastToGuests({ type:'LOBBY_RETURN' });
     };
   } else {
     nextBtn.style.display = 'none';

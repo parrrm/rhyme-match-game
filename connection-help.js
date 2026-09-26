@@ -44,7 +44,7 @@
     const { online=true, code='', stage='', serviceReachable=null, hostOnline=null } = input || {};
     if (online === false) return 'offline';
     if (code === 'permission-denied' || code === 'PERMISSION_DENIED' || code === 'auth/operation-not-allowed' || code === 'auth/invalid-api-key') return 'permission';
-    if (code === 'room-not-found' || code === 'room-expired' || code === 'peer-unavailable') return 'room';
+    if (code === 'room-not-found' || code === 'room-expired') return 'room';
     if (code === 'room-full') return 'full';
     if (code === 'same-browser-host') return 'sameBrowser';
     if (hostOnline === false || stage === 'host-disconnect') return 'host';
