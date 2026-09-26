@@ -482,7 +482,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 }
 .sidebar.active{ display:block; }
 @media (max-width:860px){ .sidebar{ display:none !important; } }
-.sidebar h3{ text-align:center; font-size:16px; color:var(--spotlight); margin-bottom:12px; }
+.scoreboard-content h3{ text-align:center; font-size:16px; color:var(--spotlight); margin-bottom:12px; }
 .podium{ display:flex; align-items:flex-end; justify-content:center; gap:8px; margin-bottom:14px; }
 .podium-slot{ text-align:center; flex:1; }
 .podium-bar{ border-radius:8px 8px 0 0; display:flex; align-items:flex-start; justify-content:center; padding-top:6px; font-family:var(--font-display); font-weight:700; }
@@ -617,9 +617,6 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 <div class="sheet-backdrop" id="sheetBackdrop"></div>
 <div class="bottom-sheet" id="bottomSheet">
   <div class="sheet-handle"></div>
-  <h3 style="text-align:center;color:var(--spotlight);">Scoreboard</h3>
-  <div id="mobilePodium"></div>
-  <ul class="score-list" id="mobileScoreList"></ul>
 </div>
 <button class="fab-scoreboard" id="fabScoreboard">🏆 Scores</button>
 
@@ -838,9 +835,11 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 
   <!-- DESKTOP SIDEBAR SCOREBOARD -->
   <div id="sidebarView" class="sidebar">
-    <h3>🏆 Scoreboard</h3>
-    <div id="sidebarPodium"></div>
-    <ul class="score-list" id="sidebarScoreList"></ul>
+    <div id="scoreboardContent" class="scoreboard-content">
+      <h3>🏆 Scoreboard</h3>
+      <div id="scoreboardPodium"></div>
+      <ul class="score-list" id="scoreboardList"></ul>
+    </div>
   </div>
 </div>
 
@@ -1160,21 +1159,18 @@ class UIManager {
         <span class="score-player"><span class="rank">${i+1}.</span>${p.eliminated ? '<span aria-label="Eliminated">💀</span>' : avatarDot(p.colorIndex)}<span class="score-name">${escapeHtml(p.name)}</span>${p.id === myUid ? '<small class="you-tag">YOU</small>' : ''}</span>
         <span class="score-values"><b>${p.score}</b>${p.lastDelta == null ? '' : `<small class="score-delta ${p.lastDelta > 0 ? 'positive' : p.lastDelta < 0 ? 'negative' : 'neutral'}" aria-label="Last round ${formatDelta(p.lastDelta)}">${formatDelta(p.lastDelta)}</small>`}</span>
       </li>`).join('');
-    document.getElementById('sidebarPodium').innerHTML = podiumHtml;
-    document.getElementById('mobilePodium').innerHTML = podiumHtml;
-    ['sidebarScoreList','mobileScoreList'].forEach(id => {
-      const list = document.getElementById(id);
-      const previous = new Map([...list.children].map(row => [row.dataset.playerId, row.getBoundingClientRect().top]));
-      list.innerHTML = listHtml;
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      [...list.children].forEach(row => {
-        const before = previous.get(row.dataset.playerId);
-        if (before == null) return;
-        const distance = before - row.getBoundingClientRect().top;
-        if (Math.abs(distance) > 2 && Math.abs(distance) < 800 && typeof row.animate === 'function'){
-          row.animate([{ transform:`translateY(${distance}px)` }, { transform:'translateY(0)' }], { duration:260, easing:'cubic-bezier(.22,1,.36,1)' });
-        }
-      });
+    document.getElementById('scoreboardPodium').innerHTML = podiumHtml;
+    const list = document.getElementById('scoreboardList');
+    const previous = new Map([...list.children].map(row => [row.dataset.playerId, row.getBoundingClientRect().top]));
+    list.innerHTML = listHtml;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    [...list.children].forEach(row => {
+      const before = previous.get(row.dataset.playerId);
+      if (before == null) return;
+      const distance = before - row.getBoundingClientRect().top;
+      if (Math.abs(distance) > 2 && Math.abs(distance) < 800 && typeof row.animate === 'function'){
+        row.animate([{ transform:`translateY(${distance}px)` }, { transform:'translateY(0)' }], { duration:260, easing:'cubic-bezier(.22,1,.36,1)' });
+      }
     });
   }
 
@@ -1474,8 +1470,17 @@ document.getElementById('inputRhyme').addEventListener('input', (e) => {
 });
 
 /* --- Mobile scoreboard sheet --- */
+function syncScoreboardPlacement(){
+  const content = document.getElementById('scoreboardContent');
+  const mobile = window.matchMedia('(max-width:860px)').matches;
+  const destination = document.getElementById(mobile ? 'bottomSheet' : 'sidebarView');
+  if (content.parentElement !== destination) destination.appendChild(content);
+  if (!mobile) closeSheet();
+}
 function openSheet(){ document.getElementById('sheetBackdrop').classList.add('active'); document.getElementById('bottomSheet').classList.add('active'); }
 function closeSheet(){ document.getElementById('sheetBackdrop').classList.remove('active'); document.getElementById('bottomSheet').classList.remove('active'); }
+window.addEventListener('resize', syncScoreboardPlacement);
+syncScoreboardPlacement();
 document.getElementById('fabScoreboard').addEventListener('click', openSheet);
 document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
 
