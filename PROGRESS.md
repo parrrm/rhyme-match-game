@@ -28,13 +28,14 @@ Implement `/Users/apple/.codex/attachments/0db7c4d3-3e5a-41ad-83b5-cfb1feb1b9d4/
 - Mobile results were inspected at a 390px CSS viewport: no horizontal overflow and action buttons were at least 48px tall. The lobby had no horizontal overflow. Final inline script syntax, all 12 tests, diff checks, and the no-PeerJS search pass.
 - Earlier host+guest custom 23s Classic full round completed with host/share/join/start, same score on both clients, no console errors. Normal results phase persisted after host reload.
 
-## Remaining work
+## Completion
 
-1. Commit and push the verified changes to the existing GitHub Pages repo.
-2. Confirm the published page loads and record the deployment result.
+- Implementation was committed as `f42b91f` and pushed to `main`.
+- GitHub Pages build `36322731876` completed successfully. The public page returned HTTP 200 with the new Twist challenge and handoff code at `https://parrrm.github.io/rhyme-match-game/`.
+- No remaining implementation work for this request. New requests can start from the current `main` branch.
 
 ## Notes
 
-- Existing repo remote: `https://github.com/parrrm/rhyme-match-game.git`, main. Previous deployed version: `b9f15d6` at `https://parrrm.github.io/rhyme-match-game/`.
+- Existing repo remote: `https://github.com/parrrm/rhyme-match-game.git`, main. Previous version before this work was `b9f15d6`.
 - Previous disposable Firebase test room `Q3B5UMSE` is no longer needed.
 - No new networking infrastructure or PeerJS code has been introduced.
