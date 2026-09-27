@@ -201,6 +201,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 .phase-track-line{ width:20px; height:2px; background:var(--line); }
 .phase-dot.done{ background:var(--confetti); }
 .phase-dot.current{ background:var(--spotlight); width:22px; border-radius:6px; box-shadow:0 0 0 4px rgba(41,226,255,.22); }
+.round-objective{ margin:0 0 18px; padding:11px 15px; border-left:4px solid var(--mode-accent); border-radius:10px; background:var(--stage-2); color:var(--paper); font-weight:750; line-height:1.4; }
 
 /* ============================================================
    HEADER STATS BAR
@@ -345,14 +346,13 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 @keyframes tutorialAnswerIn{ from{ opacity:0; transform:translateY(8px) scale(.96); } to{ opacity:1; transform:translateY(0) scale(1); } }
 .avatar-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:middle; flex-shrink:0; }
 
-.mode-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
-@media (max-width:480px){ .mode-grid{ grid-template-columns:1fr; } }
+.mode-grid{ display:grid; grid-template-columns:1fr; gap:7px; margin:10px 0; max-width:520px; }
 .mode-card{
   text-align:left;
   background:var(--stage-2);
   border:1.5px solid var(--line);
   border-radius:var(--radius-md);
-  padding:13px 14px;
+  padding:9px 12px;
   cursor:pointer;
   color:var(--paper);
   width:100%;
@@ -361,8 +361,13 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 }
 .mode-card:hover{ border-color:var(--muted); }
 .mode-card.selected{ border-color:var(--spotlight); background:#10283d; box-shadow:0 0 0 3px rgba(41,226,255,.18); }
-.mode-card-title{ font-family:var(--font-display); font-weight:800; font-size:16px; margin-bottom:3px; display:flex; align-items:center; gap:6px; }
-.mode-card-desc{ display:block; font-size:14px; color:var(--muted); margin:0; line-height:1.4; }
+.mode-card-title{ font-family:var(--font-display); font-weight:800; font-size:15px; margin-bottom:2px; display:flex; align-items:center; gap:6px; }
+.mode-card-desc{ display:block; font-size:12px; color:var(--muted); margin:0; line-height:1.3; }
+.round-mode-picker{ margin:0 0 14px; padding:10px 14px; background:var(--stage-2); border:1px solid var(--line); border-radius:var(--radius-md); }
+.round-mode-picker summary{ cursor:pointer; min-height:40px; display:flex; align-items:center; gap:8px; color:var(--paper); font-weight:700; }
+.round-mode-picker summary strong{ color:var(--mode-accent); }
+.round-mode-picker summary::after{ content:'⌄'; margin-left:auto; color:var(--spotlight); }
+.round-mode-picker[open] summary::after{ content:'⌃'; }
 .mode-readonly{
   display:flex; align-items:center; justify-content:center; gap:8px;
   background:var(--stage-2); border-radius:var(--radius-md); padding:12px; margin:14px 0; border:1px solid var(--line);
@@ -381,6 +386,8 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
   box-shadow:0 0 40px var(--mode-glow), inset 0 0 40px rgba(255,255,255,.03);
   transition:border-color .3s ease, box-shadow .3s ease;
 }
+.submit-stage{ display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:146px; padding:20px 24px; }
+.submit-target{ min-width:0; }
 .stage-eyebrow{ font-size:12.5px; color:var(--muted); font-weight:700; letter-spacing:.4px; }
 .target-word{
   font-family:var(--font-display);
@@ -395,7 +402,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 .target-word.long-word{ font-size:clamp(22px,6vw,32px); }
 .target-word.spinning{ color:var(--muted); }
 
-.timer-ring-wrap{ position:absolute; top:14px; right:14px; width:58px; height:58px; }
+.timer-ring-wrap{ position:relative; flex:none; width:106px; height:106px; filter:drop-shadow(0 0 14px var(--mode-glow)); }
 .timer-ring{ width:100%; height:100%; transform:rotate(-90deg); }
 .timer-ring-bg{ fill:none; stroke:var(--line); stroke-width:8; }
 .timer-ring-fg{ fill:none; stroke:var(--mode-accent); stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset 1s linear, stroke .2s ease; }
@@ -403,8 +410,10 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 .timer-ring-fg.danger{ stroke:var(--danger); }
 .timer-ring-label{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  font-family:var(--font-display); font-weight:600; font-size:16px; color:var(--paper);
+  font-family:var(--font-display); font-weight:800; font-size:clamp(34px,7vw,46px); color:var(--paper); font-variant-numeric:tabular-nums;
 }
+.timer-ring-label small{ align-self:center; font:800 13px var(--font-body); margin:21px 0 0 2px; color:var(--muted); }
+@media (max-width:420px){ .submit-stage{ gap:12px; padding:16px; } .timer-ring-wrap{ width:94px; height:94px; } .submit-stage .target-word{ font-size:clamp(23px,7vw,34px); } }
 .stage-card.time-low{ animation:pulseGlow 1s ease-in-out infinite; }
 @keyframes pulseGlow{ 0%,100%{ box-shadow:0 0 40px rgba(255,59,59,.12);} 50%{ box-shadow:0 0 52px rgba(255,59,59,.32);} }
 
@@ -715,6 +724,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
       <div class="phase-dot" data-phase="judge"></div><div class="phase-track-line"></div>
       <div class="phase-dot" data-phase="results"></div>
     </div>
+    <p class="round-objective" id="roundObjective" role="status" aria-live="polite" hidden></p>
 
     <!-- 1. MAIN MENU -->
     <div id="menuView" class="view active">
@@ -809,13 +819,13 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
     </div>
 
     <dialog id="howToPlayDialog" class="tutorial-dialog" aria-labelledby="howToPlayTitle">
-      <div class="tutorial-head"><h2 id="howToPlayTitle">How to Play</h2><button type="button" class="btn-ghost btn-sm" id="btnCloseTutorial" aria-label="Close tutorial">✕</button></div>
+      <div class="tutorial-head"><h2 id="howToPlayTitle">How to Play · Classic Rhyme</h2><button type="button" class="btn-ghost btn-sm" id="btnCloseTutorial" aria-label="Close tutorial">✕</button></div>
       <p class="tutorial-progress" id="tutorialProgress" aria-live="polite">1 / 5</p>
       <section class="tutorial-step" data-tutorial-step="0"><div class="tutorial-visual"><span class="stage-eyebrow">TARGET WORD</span><strong class="tutorial-target">MOON</strong></div><p>Think of one word that rhymes with the target.</p></section>
       <section class="tutorial-step" data-tutorial-step="1" hidden><div class="tutorial-visual"><div class="tutorial-answers"><span class="tutorial-answer">● TUNE</span><span class="tutorial-answer">● SPOON</span><span class="tutorial-answer">● TUNE</span><span class="tutorial-answer">● JUNE</span></div></div><p>Everyone writes their own answer at the same time.</p></section>
       <section class="tutorial-step" data-tutorial-step="2" hidden><div class="tutorial-visual"><div class="tutorial-answers"><span class="tutorial-answer">🔒 Locked</span><span class="tutorial-answer">🔒 Locked</span><span class="tutorial-answer">🔒 Locked</span><span class="tutorial-answer">🔒 Locked</span></div></div><p>Nobody sees another player's answer until everyone locks in or the timer ends.</p></section>
-      <section class="tutorial-step" data-tutorial-step="3" hidden><div class="tutorial-visual"><div class="tutorial-answers"><span class="tutorial-answer matched">TUNE</span><span class="tutorial-answer matched">TUNE</span><span class="tutorial-answer">SPOON</span><span class="tutorial-answer">JUNE</span></div></div><p>Answers appear together. The host checks that they rhyme, then matching words score.</p></section>
-      <section class="tutorial-step" data-tutorial-step="4" hidden><div class="tutorial-visual"><strong class="tutorial-target">TUNE +3</strong><span>Two players matched · Classic Rhyme</span><strong>→ Next Round</strong></div><p>That's it! Think fast. Find your rhyme twin.</p></section>
+      <section class="tutorial-step" data-tutorial-step="3" hidden><div class="tutorial-visual"><div class="tutorial-answers"><span class="tutorial-answer matched">TUNE</span><span class="tutorial-answer matched">TUNE</span><span class="tutorial-answer">SPOON</span><span class="tutorial-answer">JUNE</span></div></div><p id="tutorialReveal">Answers appear together. The host checks that they rhyme, then matching words score.</p></section>
+      <section class="tutorial-step" data-tutorial-step="4" hidden><div class="tutorial-visual"><strong class="tutorial-target" id="tutorialScore">TUNE +3</strong><span id="tutorialScoreDetail">Two players matched · Classic Rhyme</span><strong id="tutorialNextRound">→ Next Round</strong></div><p id="tutorialFinish">That's it! Think fast. Find your rhyme twin.</p></section>
       <div class="tutorial-actions"><button type="button" class="btn-ghost" id="btnTutorialBack">Back</button><button type="button" class="btn-primary" id="btnTutorialNext">Next</button></div>
     </dialog>
     </div>
@@ -824,6 +834,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
     <div id="targetSetupView" class="view">
       <h2 style="text-align:center;">Pick the target word</h2>
       <p style="text-align:center;">Everyone will have to think of a word that rhymes with it.</p>
+      <details class="round-mode-picker" id="roundModePicker"><summary>Mode for this round: <strong id="roundModeLabel">Classic Rhyme</strong></summary><div class="mode-grid" id="roundModeGrid"></div></details>
 
       <div class="word-slot" id="wordSlotDisplay">Tap "Random Word" to draw one</div>
       <button class="btn-block" id="btnRandomWord">🎲 Random Word</button>
@@ -845,18 +856,16 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 
     <!-- 4. SUBMIT RHYME -->
     <div id="submitRhymeView" class="view">
-      <div class="stage-card" id="submitStageCard">
+      <div class="stage-card submit-stage" id="submitStageCard">
+        <div class="submit-target"><span class="stage-eyebrow">TARGET WORD</span><div id="displayTargetWord" class="target-word">---</div></div>
         <div class="timer-ring-wrap">
           <svg class="timer-ring" viewBox="0 0 120 120">
             <circle class="timer-ring-bg" cx="60" cy="60" r="52"></circle>
             <circle class="timer-ring-fg" id="timerRingFg" cx="60" cy="60" r="52"></circle>
           </svg>
-          <div class="timer-ring-label"><span id="timerDisplay">15</span></div>
+          <div class="timer-ring-label" role="timer" aria-label="Seconds remaining"><span id="timerDisplay">15</span><small aria-hidden="true">s</small></div>
         </div>
-        <span class="stage-eyebrow">TARGET WORD</span>
-        <div id="displayTargetWord" class="target-word">---</div>
       </div>
-      <p style="text-align:center;">Secretly write a word that rhymes with it. No one can see your answer until everyone locks in.</p>
 
       <div class="input-group">
         <label class="visually-hidden" for="inputRhyme">Your rhyming word</label>
@@ -913,7 +922,7 @@ button.btn-primary:focus-visible, .tab-btn:focus-visible{ outline:3px solid var(
 
       <div class="btn-row" style="margin-top:20px;">
         <button class="btn-primary" id="btnNextRound" style="display:none;">⚡ Quick Next Round</button>
-        <button class="btn-ghost" id="btnChooseTarget" style="display:none;">Choose Target</button>
+        <button class="btn-ghost" id="btnChooseTarget" style="display:none;">Choose Word / Mode</button>
         <button class="btn-success" id="btnRematch" style="display:none;">Rematch</button>
         <button class="btn-ghost" id="btnReturnLobby" style="display:none;">Return to Lobby</button>
       </div>
@@ -1063,24 +1072,36 @@ const QUALITY_WORDS = Array.from(new Set([...WORD_FAMILIES.core, ...Object.keys(
 const MODES = {
   classic: {
     label: "Classic Rhyme", emoji: "🎤", timerSeconds: 15, elimination: false,
+    objective: "Write a secret rhyme. Match exactly one other player for the biggest reward.",
+    tutorialScore: "TUNE +3", tutorialDetail: "Two players chose TUNE · +3 each",
+    tutorialFinish: "Match one other player for +3; larger matching groups earn +1.",
     desc: "Match one other player for +3. Larger matching groups get +1.",
     points(matchCount){ if (matchCount === 2) return 3; if (matchCount > 2) return 1; return 0; },
     invalid: -2, timeout: -1
   },
   speed: {
     label: "Speed Round", emoji: "⚡", timerSeconds: 8, elimination: false,
+    objective: "Write a secret rhyme in 8 seconds. Matching scores are doubled.",
+    tutorialScore: "TUNE +6", tutorialDetail: "Two players matched in 8 seconds · +6 each",
+    tutorialFinish: "Think fast: Classic rewards and penalties are doubled.",
     desc: "8 seconds to answer. Classic points and penalties are doubled.",
     points(matchCount){ if (matchCount === 2) return 6; if (matchCount > 2) return 2; return 0; },
     invalid: -4, timeout: -2
   },
   lonewolf: {
     label: "Lone Wolf", emoji: "🐺", timerSeconds: 15, elimination: false,
+    objective: "Write a valid rhyme nobody else chooses to earn +4.",
+    tutorialScore: "SPOON +4", tutorialDetail: "Only one player chose SPOON · +4",
+    tutorialFinish: "A unique valid rhyme earns +4; a shared rhyme earns +1.",
     desc: "A valid answer nobody else chose gets +4; matching gets +1.",
     points(matchCount){ if (matchCount === 1) return 4; if (matchCount >= 2) return 1; return 0; },
     invalid: -2, timeout: -1
   },
   suddendeath: {
     label: "Sudden Death", emoji: "💀", timerSeconds: 15, elimination: true,
+    objective: "Write a secret rhyme and score points. The lowest total is eliminated.",
+    tutorialScore: "TUNE +3", tutorialDetail: "Two players matched · +3 each",
+    tutorialFinish: "After scoring, the player with the lowest total is eliminated.",
     desc: "Classic points. The lowest total is eliminated each round.",
     points(matchCount){ if (matchCount === 2) return 3; if (matchCount > 2) return 1; return 0; },
     invalid: -2, timeout: -1
@@ -1194,13 +1215,25 @@ class UIManager {
     const isGameActive = (viewId !== 'menuView' && viewId !== 'lobbyView');
     document.getElementById('statsHeader').style.display = isGameActive ? 'flex' : 'none';
     document.getElementById('brandHeader').style.display = viewId === 'menuView' ? 'block' : 'none';
-    document.getElementById('phaseTracker').style.display = isGameActive ? 'flex' : 'none';
+    document.getElementById('phaseTracker').style.display = isGameActive && viewId !== 'submitRhymeView' ? 'flex' : 'none';
 
     document.getElementById('sidebarView').classList.toggle('active', isGameActive);
     document.getElementById('fabScoreboard').classList.toggle('active', isGameActive);
 
     const phaseMap = { targetSetupView:'target', voteView:'target', submitRhymeView:'rhyme', spectatorView:'rhyme', waitingView:'rhyme', judgingView:'judge', resultsView:'results' };
     if (phaseMap[viewId]) UIManager.setPhase(phaseMap[viewId]);
+    const objective = document.getElementById('roundObjective');
+    const mode = MODES[engine.mode] || MODES.classic;
+    const instructions = {
+      targetSetupView: 'Choose the target word for the next round.',
+      voteView: 'Predict which player will match you most over the next five rounds, or skip.',
+      submitRhymeView: mode.objective,
+      judgingView: isHost ? 'Check each rhyme, then award the round points.' : 'The host is checking the rhymes before scores appear.',
+      waitingView: 'Stay in the room. You can play when the host starts the next round.',
+      spectatorView: 'Watch this round; the remaining players are writing their rhymes.'
+    };
+    objective.textContent = instructions[viewId] || '';
+    objective.hidden = !instructions[viewId];
   }
 
   static setPhase(phaseName){
@@ -1592,6 +1625,20 @@ document.getElementById('roomCodeDisplay').addEventListener('click', async () =>
 const tutorialDialog = document.getElementById('howToPlayDialog');
 const tutorialSteps = [...tutorialDialog.querySelectorAll('[data-tutorial-step]')];
 let tutorialIndex = 0;
+function updateModeTutorial(){
+  const mode = MODES[engine.mode] || MODES.classic;
+  document.getElementById('howToPlayTitle').textContent = `How to Play · ${mode.label}`;
+  document.getElementById('tutorialReveal').textContent = engine.mode === 'lonewolf'
+    ? 'Answers appear together. The host checks the rhymes; unique valid words score the most.'
+    : 'Answers appear together. The host checks the rhymes before points are awarded.';
+  document.querySelectorAll('[data-tutorial-step="3"] .tutorial-answer').forEach((answer, index) => {
+    answer.classList.toggle('matched', engine.mode === 'lonewolf' ? index === 2 : index < 2);
+  });
+  document.getElementById('tutorialScore').textContent = mode.tutorialScore;
+  document.getElementById('tutorialScoreDetail').textContent = mode.tutorialDetail;
+  document.getElementById('tutorialFinish').textContent = mode.tutorialFinish;
+  document.getElementById('tutorialNextRound').textContent = mode.elimination ? '→ Next Round or Champion' : '→ Next Round';
+}
 function showTutorialStep(index){
   tutorialIndex = Math.max(0, Math.min(index, tutorialSteps.length - 1));
   tutorialSteps.forEach((step, i) => { step.hidden = i !== tutorialIndex; });
@@ -1600,6 +1647,7 @@ function showTutorialStep(index){
   document.getElementById('btnTutorialNext').textContent = tutorialIndex === tutorialSteps.length - 1 ? (isHost ? 'Got it — Back to Room' : 'Got it — Join the Room') : 'Next';
 }
 document.querySelectorAll('[data-open-tutorial]').forEach(button => button.addEventListener('click', () => {
+  updateModeTutorial();
   showTutorialStep(0);
   tutorialDialog.showModal();
 }));
@@ -1679,13 +1727,13 @@ if (incomingRoom){
 function updateLobbyRules(){
   const mode = MODES[engine.mode] || MODES.classic;
   document.getElementById('lobbyModeLabel').textContent = `${mode.emoji} ${mode.label}`;
+  document.getElementById('roundModeLabel').textContent = `${mode.emoji} ${mode.label}`;
   document.getElementById('lobbyTimerRule').textContent = `${mode.timerSeconds} seconds per round`;
   document.getElementById('lobbyRoundsRule').textContent = mode.elimination ? 'Until one player remains.' : 'Keep playing until the host ends the game.';
   document.getElementById('lobbyAdvancedRule').textContent = mode.elimination ? 'The host reviews rhymes, then the lowest total is eliminated.' : 'The host reviews rhymes before points are awarded.';
 }
 function renderModeGrid(){
-  const grid = document.getElementById('modeGrid');
-  grid.innerHTML = Object.keys(MODES).map(key => {
+  const markup = Object.keys(MODES).map(key => {
     const m = MODES[key];
     const accent = MODE_COLORS[key];
     const selected = engine.mode === key;
@@ -1695,17 +1743,23 @@ function renderModeGrid(){
       <span class="mode-card-desc">${m.desc}</span>
     </button>`;
   }).join('');
+  const grids = [document.getElementById('modeGrid'), document.getElementById('roundModeGrid')];
+  grids.forEach(grid => { grid.innerHTML = markup; });
   applyModeTheme(engine.mode);
   updateLobbyRules();
   document.getElementById('clientModeLabel').style.color = MODE_COLORS[engine.mode];
-  grid.querySelectorAll('.mode-card').forEach(card => {
+  grids.forEach(grid => grid.querySelectorAll('.mode-card').forEach(card => {
     card.addEventListener('click', () => {
       engine.mode = card.dataset.mode;
       Sound.click();
       renderModeGrid();
       broadcastRoster();
+      if (document.getElementById('targetSetupView').classList.contains('active')){
+        const me = engine.players.get(myUid);
+        UIManager.updateHeader(currentRound, me ? me.score : 0, engine.mode, false);
+      }
     });
-  });
+  }));
 }
 
 /* --- Firebase rooms: hosted discovery, persisted state, and resumable clients. --- */
@@ -2357,6 +2411,7 @@ function updatePredictionResults(results){
 /* --- TARGET SETUP (HOST) --- */
 document.getElementById('btnStartRound').addEventListener('click', () => {
   UIManager.showView('targetSetupView');
+  renderModeGrid();
   queuePersist();
   document.getElementById('inputCustomTarget').value = '';
   document.getElementById('wordSlotDisplay').textContent = 'Tap "Random Word" to draw one';
@@ -2418,6 +2473,7 @@ function startRhymeEntry(targetWord){
   document.getElementById('displayTargetWord').classList.toggle('long-word', targetWord.length > 9);
 
   const inputEl = document.getElementById('inputRhyme');
+  inputEl.placeholder = `Rhyme with ${targetWord}`;
   inputEl.value = '';
   inputEl.type = 'password';
   inputEl.disabled = false;
@@ -2656,6 +2712,7 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
         currentRound = 0;
         broadcastRoster();
         UIManager.showView('targetSetupView');
+        renderModeGrid();
       };
     } else {
       nextBtn.style.display = 'inline-block';
