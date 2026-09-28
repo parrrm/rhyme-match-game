@@ -15,7 +15,7 @@ Play at **https://parrrm.github.io/rhyme-match-game/**. The site is published fr
 
 `firebase-config.js` contains the public web app configuration. Access is enforced by the scoped rules in `database.rules.json`, not by hiding this configuration. Anonymous sign-in is enabled. The live database rules must stay in sync with this file when room paths change.
 
-The game uses Firebase JavaScript SDK 12.19.0 from Google's CDN. `connection-help.js` is local and has tests in `tests/connection-help.test.cjs` (`node --test`).
+The game uses Firebase JavaScript SDK 12.19.0 from Google's CDN. Connection guidance lives in `client/ui/connectionHelp.js` and is covered by `tests/connection-help.test.cjs` (`npm test`).
 
 ## Game features
 
@@ -27,3 +27,14 @@ The game uses Firebase JavaScript SDK 12.19.0 from Google's CDN. `connection-hel
 - **Lone Wolf** can add a growing Bounty (+2, +4, …) for consecutive valid solo answers. **Sudden Death** can use Three Lives: the lowest scorer loses one life each round and is eliminated at zero. Eliminated players can Exit or Spectate without submitting or scoring.
 
 The lobby QR code is generated in the browser from the current room link; it does not send the link to a QR service. `qrcode.js` is qrcode-generator 2.0.4 (MIT license, attribution in the bundled file).
+
+## Project structure and local development
+
+The root `index.html` remains directly servable by GitHub Pages. It loads `styles/main.css` and `client/main.js` as browser ES modules. `client/main.js` coordinates the existing screens and Firebase events; the extracted modules keep the game rules and transport operations separate:
+
+- `client/game/modes.js`, `words.js`, `gameState.js`, `scoring.js`, `rounds.js`: mode settings, target selection, host state, points, and round setup.
+- `client/room/roomManager.js`: Firebase authentication, room/session identifiers, subscriptions, presence, and database writes. Firebase Realtime Database is the backend, so there is no custom server or socket process.
+- `client/ui/ui.js`, `results.js`, `connectionHelp.js`: views, scoreboard, result ranking, and connection guidance.
+- `styles/main.css`: the existing responsive neon styling.
+
+Run `npm install`, then `npm run dev` for the Vite development server. Run `npm test` for the game and UI logic checks, `npm run build` to create `dist/`, and `npm run preview` to inspect that build. The build uses relative asset paths so it can be served beneath a GitHub Pages repository path. `vite.config.js` accounts for the colon in this workspace directory name during local development; the dev server listens on localhost. `node_modules/` and `dist/` are ignored; the current live Pages site serves the source files from `main` directly.

@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { classify, issues } = require('../connection-help.js');
+const { before } = require('node:test');
+let classify, issues;
+before(async () => { ({ classify, issues } = await import('../client/ui/connectionHelp.js')); });
 
 test('offline device wins over secondary errors', () => {
   assert.equal(classify({ online:false, code:'network' }), 'offline');

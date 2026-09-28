@@ -1,19 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-
-const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-const definitions = source.slice(source.indexOf('const MODES ='), source.indexOf('/* Each mode gets its own accent'));
-const engineCode = source.slice(source.indexOf('class RhymeGameEngine'), source.indexOf('/* ============================================================\n   NETWORKING & APP STATE'));
-const Engine = vm.runInNewContext(`${definitions}\nconst PLAYER_COLORS = Array(8).fill('');\nfunction rememberTarget(){}\n${engineCode}\nRhymeGameEngine`);
-const timerCode = source.slice(source.indexOf('function resolveRoundTimer()'), source.indexOf('function beginRound('));
-const predictionCode = source.slice(source.indexOf('function settlePredictionResults('), source.indexOf('/* --- TARGET SETUP (HOST) --- */'));
-function resolveTimer(engine, random = 0){
-  const math = Object.create(Math); math.random = () => random;
-  return vm.runInNewContext(`${definitions}\n${timerCode}\nresolveRoundTimer()`, { engine, Math:math });
-}
+const { before } = require('node:test');
+let Engine, resolveRoundTimer, settlePredictionResults;
+before(async () => {
+  const items = new Map();
+  Object.defineProperty(globalThis, 'localStorage', { configurable:true, value:{ getItem:key => items.get(key) ?? null, setItem:(key, value) => items.set(key, String(value)) } });
+  ({ RhymeGameEngine:Engine } = await import('../client/game/gameState.js'));
+  ({ resolveRoundTimer } = await import('../client/game/rounds.js'));
+  ({ settlePredictionResults } = await import('../client/game/scoring.js'));
+});
+function resolveTimer(engine, random = 0){ return resolveRoundTimer(engine, () => random); }
 
 function round(engine, mode, modifier, answers){
   engine.mode = mode;
@@ -91,8 +87,7 @@ test('prediction settles correct, wrong, skip and tied leaders with the active-p
     ['b',new Map([['a',2],['c',0]])],
     ['c',new Map([['a',1]])]
   ]);
-  const settle = vm.runInNewContext(`${predictionCode}\nsettlePredictionResults`,{engine:e});
-  const results={}; settle(results);
+  const results={}; settlePredictionResults(e,results);
   assert.deepEqual(Array.from(results.voteResults,v=>v.delta),[3,-2,0]);
   assert.deepEqual(['a','b','c'].map(id=>e.players.get(id).score),[3,-2,0]);
   assert.equal(e.predictionRound,0);

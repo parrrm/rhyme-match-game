@@ -1,3 +1,30 @@
+# Project refactor progress — 2026-09-27
+
+## Current objective
+
+Refactor the existing single-file Firebase game into browser ES modules and external CSS, add Vite dev/build scripts, keep behavior and GitHub Pages compatibility. The planned final tree was shown to the user before editing. Firebase RTDB remains the backend; no custom `/server` is needed.
+
+## Completed
+
+- Extracted CSS to `styles/main.css` and inline JavaScript to `client/main.js`.
+- Extracted mode configuration, word bank/history/twists, host game state, scoring/predictions, and round setup/timer into `client/game/`.
+- Extracted view helpers/controller, results ranking/headline, and connection guidance into `client/ui/`.
+- Extracted Firebase initialization, room IDs/sessions, subscriptions, and RTDB write helpers into `client/room/roomManager.js`.
+- Converted QR vendor library and Firebase config to ES imports so Vite bundles them. Root `index.html` also works as a static GitHub Pages page.
+- Added `package.json`, `package-lock.json`, `.gitignore`; Vite build uses a relative base for GitHub Pages paths.
+- Updated tests to import the new modules; 12/12 pass. `npm run build` succeeds. A production preview loads with CSS and no browser errors.
+- Live local host + independent Chrome guest: created/joined room `M9M72LNK`, CAT/BAT on both, judging, +3 and total 3 on both results/scoreboards. Host resumed the same result after reload and showed the QR. One missing UI helper import was found and fixed before continuing.
+
+## Final verification
+
+- `npm test`: 12/12 pass; `npm run build`: succeeds; `npm run dev`: serves HTTP 200 and loads with no browser errors; production preview loads with CSS and QR generation.
+- A second full two-browser round after RTDB write extraction: CAT/HAT, both clients reached judging and results, each earned +3 and moved from total 3 to 6. Guest reload rejoined the canonical room and saw saved results.
+- The 390px mobile menu had no horizontal overflow and a 54px primary button; CSS was moved without edits. The production lobby QR rendered and its code button remained 48px high.
+- No PeerJS references; `git diff --check` and JavaScript syntax checks pass.
+- README updated. No remaining implementation work. Changes are local and have not been pushed or deployed.
+
+---
+
 # Rhyme Match mode implementation progress
 
 Updated 2026-09-27. Continue this task when the user says “resume.”

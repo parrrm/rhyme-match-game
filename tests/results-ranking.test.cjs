@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { build } = require('../results-ranking.js');
+const { before } = require('node:test');
+let build;
+before(async () => { ({ build } = await import('../client/ui/results.js')); });
 
 test('round ranking and movement use the final delta including bonuses', () => {
   const result = build([

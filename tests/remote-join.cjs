@@ -20,13 +20,12 @@ const { chromium } = require('playwright');
       roster: document.querySelector('#playerRoster')?.textContent?.trim() || '',
       count: document.querySelector('#playerCount')?.textContent?.trim() || '',
       message: document.querySelector('#lobbyStatusMessage')?.textContent?.trim() || '',
-      roomId: typeof joinedRoomId !== 'undefined' ? joinedRoomId : '',
-      joined: typeof clientJoined !== 'undefined' ? clientJoined : false,
-      hostUid: typeof hostUid !== 'undefined' ? hostUid : '',
+      roomId: document.querySelector('#roomCodeDisplay')?.textContent?.trim() || '',
+      joined: /^Connected/.test(document.querySelector('#connectionStatus')?.textContent || ''),
     }));
     const line = JSON.stringify(snapshot);
     if (line !== last) { console.log(`${Date.now() - start}ms ${line}`); last = line; }
-    if (snapshot.roomId === room && snapshot.joined && snapshot.hostUid && snapshot.roster.includes('WAN QC')) {
+    if (snapshot.roomId === room && snapshot.joined && snapshot.lobby && snapshot.roster.includes('WAN QC') && Number.parseInt(snapshot.count, 10) >= 2) {
       console.log('RESULT: joined canonical host roster');
       await browser.close();
       return;

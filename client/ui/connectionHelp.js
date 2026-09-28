@@ -1,6 +1,3 @@
-(function(root){
-  'use strict';
-
   const issues = {
     offline: {
       title:'This device is offline',
@@ -53,6 +50,5 @@
     return 'connection';
   }
 
-  root.ConnectionHelp = { classify, issues };
-  if (typeof module !== 'undefined' && module.exports) module.exports = { classify, issues };
-})(typeof window !== 'undefined' ? window : globalThis);
+
+export { classify, issues };
