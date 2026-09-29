@@ -66,3 +66,14 @@ Implement `/Users/apple/.codex/attachments/0db7c4d3-3e5a-41ad-83b5-cfb1feb1b9d4/
 - Existing repo remote: `https://github.com/parrrm/rhyme-match-game.git`, main. Previous version before this work was `b9f15d6`.
 - Previous disposable Firebase test room `Q3B5UMSE` is no longer needed.
 - No new networking infrastructure or PeerJS code has been introduced.
+
+---
+
+# Word-bank integration progress — 2026-09-29
+
+- Audited both supplied pasted files; they are identical proposed `rhymeBank.js` sources. The project actually uses `client/game/words.js`.
+- Traced consumers in `client/main.js`, `client/game/gameState.js`, and `client/game/rounds.js`; the host remains the authoritative rhyme judge.
+- Curated the proposed 167 tiered families to 2,475 pronunciation-supported family words. Removed unsupported, dictionary-uncovered, accent-sensitive, heteronym, and age-inappropriate pairings; split the `DOG` and `FROG` pronunciation groups. `core`, `longWords`, and all legacy exports remain.
+- Added `FAMILY_TIERS`, `TIER_OF`, `TARGET_POOLS`, `getRhymes`, and `isKnownRhyme`, family-first difficulty selection, recent history with blocked-storage fallback, and bank-backed twist eligibility. Custom targets receive no invented twist prompt.
+- Fixed the missing `QUALITY_WORDS` import used by the random-word animation. Added `tests/words.test.cjs` for uniqueness, tiers, rhyme lookups, cooldowns, twists, and storage failure.
+- `npm test`, `npm run build`, `node --check`, and local Vite browser load with zero console errors passed.

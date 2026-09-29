@@ -7,7 +7,7 @@ import { configureUI, MODE_COLORS, hexToRgba, applyModeTheme, avatarDot, Sound, 
 import { prepareRound } from './game/rounds.js';
 import { settlePredictionResults, updatePredictionResults } from './game/scoring.js';
 import { RhymeGameEngine } from './game/gameState.js';
-import { pickTarget } from './game/words.js';
+import { pickTarget, QUALITY_WORDS } from './game/words.js';
 import { MODES, MODE_MODIFIERS, MIN_CUSTOM_TIMER, MAX_CUSTOM_TIMER, normalizeModeSettings, configuredTimer, shrinkingFloor, previewTimer } from './game/modes.js';
 'use strict';
 /* ============================================================
