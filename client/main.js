@@ -4,10 +4,11 @@ import * as ConnectionHelp from './ui/connectionHelp.js';
 import * as ResultsRanking from './ui/results.js';
 import { buildHeadline } from './ui/results.js';
 import { configureUI, MODE_COLORS, hexToRgba, applyModeTheme, avatarDot, Sound, showToast, showModal, shakeInput, spawnConfetti, formatDelta, UIManager, escapeHtml } from './ui/ui.js';
-import { prepareRound } from './game/rounds.js';
+import { prepareRound, startRoundClock, recoverRoundPhase } from './game/rounds.js';
 import { settlePredictionResults, updatePredictionResults } from './game/scoring.js';
 import { RhymeGameEngine } from './game/gameState.js';
 import { pickTarget, QUALITY_WORDS } from './game/words.js';
+import { normalizeWord } from './game/normalize.js';
 import { MODES, MODE_MODIFIERS, MIN_CUSTOM_TIMER, MAX_CUSTOM_TIMER, normalizeModeSettings, configuredTimer, shrinkingFloor, previewTimer } from './game/modes.js';
 'use strict';
 /* ============================================================
@@ -29,6 +30,8 @@ let localScore = 0;
 let currentRound = 1;
 let currentTimerSeconds = 20;
 let countdownInterval = null;
+let autoSubmitTimer = null;
+let expiringRound = false;
 let lastKnownPlayers = [];
 configureUI(() => ({ engine, isHost, myUid, hostUid, MAX_PLAYERS }));
 function setConnectionStatus(message, state){
@@ -71,8 +74,8 @@ function updateReadyStatus(ready, total){
   document.getElementById('readyStatus').textContent = `${ready} / ${total} players ready`;
 }
 function broadcastReadyStatus(){
-  const total = engine.activePlayers().length;
-  const ready = engine.activePlayers().filter(p => engine.submissions.has(p.id)).length;
+  const total = engine.roundPlayers().length;
+  const ready = engine.roundPlayers().filter(p => engine.submissions.has(p.id)).length;
   updateReadyStatus(ready, total);
   broadcastToGuests({ type:'READY_STATUS', ready, total });
 }
@@ -126,7 +129,7 @@ document.getElementById('btnToggleVisibility').addEventListener('click', () => {
   else { input.type = 'password'; btn.innerText = 'Show'; }
 });
 document.getElementById('inputRhyme').addEventListener('input', (e) => {
-  document.getElementById('btnSubmitRhyme').disabled = e.target.value.trim().length === 0;
+  document.getElementById('btnSubmitRhyme').disabled = normalizeWord(e.target.value).length === 0;
 });
 
 /* --- Mobile scoreboard sheet --- */
@@ -383,7 +386,6 @@ let hostOnline = false;
 let localConnectionId = '';
 let lastEventSeq = 0;
 let hostEventSeq = 0;
-let persistTimer = null;
 let persistChain = Promise.resolve();
 let lastExpiryRenew = 0;
 let lastPublicSnapshot = null;
@@ -392,12 +394,14 @@ let clientJoinTimer = null;
 let clientNeedsSync = false;
 const processedCommands = new Map();
 const incomingHost = new URL(window.location.href).searchParams.get('host');
+let serverTimeOffset = 0;
+function serverNow(){ return Date.now() + serverTimeOffset; }
 
 function rememberName(name){ try { localStorage.setItem('rhymeMatchName', name); } catch(e){} }
 function hostPhase(){
-  return ['lobbyView','targetSetupView','twistRevealView','submitRhymeView','spectatorView','judgingView','resultsView']
-    .find(id => document.getElementById(id).classList.contains('active')) || 'lobbyView';
+  return engine.phase;
 }
+function showHostView(view){ engine.phase = view; UIManager.showView(view); queuePersist(); }
 function firebaseErrorCode(error){ return error && (error.code || error.message) || 'unknown'; }
 function reportRoomError(error, stage){
   const code = firebaseErrorCode(error);
@@ -411,6 +415,8 @@ async function ensureFirebase(){
   database = connection.database;
   roomUser = connection.user;
   myUid = roomUser.uid;
+  const offset = await database.ref('.info/serverTimeOffset').once('value');
+  serverTimeOffset = Number(offset.val()) || 0;
   return roomUser;
 }
 function setJoinBusy(busy){
@@ -437,6 +443,7 @@ async function setPresence(){
 }
 function bindConnectionMonitor(){
   let wasConnected = false;
+  subscribe(database.ref('.info/serverTimeOffset'), 'value', snap => { serverTimeOffset = Number(snap.val()) || 0; });
   subscribe(database.ref('.info/connected'), 'value', snap => {
     const connected = snap.val() === true;
     if (connected){
@@ -447,6 +454,7 @@ function bindConnectionMonitor(){
         if (lastPublicSnapshot) syncClientSnapshot(lastPublicSnapshot);
       }
       if (isHost || clientJoined) setConnectionStatus('Connected to room service', 'online');
+      if (isHost && hostPhase() === 'submitRhymeView' && engine.roundExpiresAt <= serverNow()) expireRound();
       wasConnected = true;
     } else if (wasConnected){
       setConnectionStatus(navigator.onLine ? 'Room service disconnected — reconnecting…' : 'This device is offline', 'error');
@@ -463,6 +471,7 @@ function serializeHostState(){
     predictions:[...engine.predictions], predictionCounts:[...engine.predictionCounts].map(([id, counts]) => [id,[...counts]]),
     predictionRound:engine.predictionRound, predictionEndRound:engine.predictionEndRound,
     predictionStake:engine.predictionStake, processedCommands:[...processedCommands],
+    roundStartedAt:engine.roundStartedAt, roundExpiresAt:engine.roundExpiresAt, roundPlayerIds:engine.roundPlayerIds,
     phase:hostPhase(), results:lastResultsPacket, savedAt:Date.now()
   };
 }
@@ -481,6 +490,10 @@ function restoreHostState(state){
   engine.predictionRound = state.predictionRound || 0;
   engine.predictionEndRound = state.predictionEndRound || 0;
   engine.predictionStake = state.predictionStake || 0;
+  engine.phase = state.phase || 'lobbyView';
+  engine.roundStartedAt = state.roundStartedAt ?? null;
+  engine.roundExpiresAt = state.roundExpiresAt ?? null;
+  engine.roundPlayerIds = Array.isArray(state.roundPlayerIds) ? state.roundPlayerIds : [...engine.players.values()].filter(p => !p.pendingNextRound && !p.eliminated).map(p => p.id);
   processedCommands.clear();
   (state.processedCommands || []).forEach(([id, seq]) => processedCommands.set(id, seq));
   lastResultsPacket = state.results || null;
@@ -498,24 +511,26 @@ function queuePersist(){
     lastExpiryRenew = Date.now();
     roomRef.child('meta/expiresAt').set(Date.now() + ROOM_LIFETIME_MS).catch(error => reportRoomError(error, 'save'));
   }
-  clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => {
-    const state = serializeHostState();
-    const snapshot = {
+  // Freeze each queued revision so later mutations cannot change an earlier write.
+  const state = JSON.parse(JSON.stringify(serializeHostState()));
+  const snapshot = {
       roomId:roomCode, hostUid, hostSessionId, phase:state.phase,
       round:state.round, mode:state.mode, settings:state.settings, roundRule:state.roundRule, clockRun:state.clockRun, targetWord:state.targetWord,
+      roundStartedAt:state.roundStartedAt, roundExpiresAt:state.roundExpiresAt, roundPlayerIds:state.roundPlayerIds,
+      lockedPlayerIds:[...engine.submissions.keys()],
+      judgingSubmissions:state.phase === 'judgingView' ? judgingSubmissions() : null,
       players:state.players, results:state.phase === 'resultsView' ? lastResultsPacket : null,
       updatedAt:firebase.database.ServerValue.TIMESTAMP
-    };
-    persistChain = persistChain.then(() => persistHostState(roomRef, state, snapshot)).catch(error => reportRoomError(error, 'save'));
-  }, 0);
+  };
+  const ref = roomRef;
+  persistChain = persistChain.then(() => persistHostState(ref, state, snapshot)).catch(error => reportRoomError(error, 'save'));
+  return persistChain;
 }
 function writeGuestMessage(uid, payload){
   if (!isHost || !roomRef || !uid) return;
   hostEventSeq = Math.max(Date.now() * 1000, hostEventSeq + 1);
   const message = { ...payload, roomId:roomCode, hostId:hostUid, hostSessionId, seq:hostEventSeq };
   const sent = publishHostMessage(roomRef, uid, message).then(() => true).catch(error => { reportRoomError(error, 'send'); return false; });
-  queuePersist();
   return sent;
 }
 function broadcastToGuests(payload){
@@ -531,19 +546,30 @@ function sendGuestCommand(payload){
 }
 let transferPending = false;
 function leaveRoomUi(){
+  if (roomCode){ try { sessionStorage.setItem('rhymeMatchLeftRoom:' + roomCode, 'yes'); } catch(e){} }
   saveSpectateChoice(false);
   clearInterval(countdownInterval);
+  clearTimeout(autoSubmitTimer);
   clearTimeout(clientJoinTimer);
-  clearTimeout(persistTimer);
   clearSubscriptions();
+  clientAttempt++;
   roomRef = null;
   clientJoined = false;
   isHost = false;
   hostStarting = false;
+  document.getElementById('btnHostInit').disabled = false;
+  setJoinBusy(false);
   connectedGuestUids.clear();
   engine.resetForRematch();
   engine.players.clear();
   engine.submissions.clear();
+  engine.phase = 'lobbyView';
+  engine.roundStartedAt = null;
+  engine.roundExpiresAt = null;
+  engine.roundPlayerIds = [];
+  roomCode = ''; hostUid = ''; hostSessionId = ''; joinedHostSessionId = '';
+  lastPublicSnapshot = null; lastEventSeq = 0; hostEventSeq = 0;
+  processedCommands.clear();
   lastResultsPacket = null;
   lastKnownPlayers = [];
   localScore = 0;
@@ -572,12 +598,10 @@ async function transferHost(keepSpectating){
       let subscriptionsCleared = false;
       try {
         if (!keepSpectating) hostPlayer.connected = false;
-        clearTimeout(persistTimer);
         await persistChain;
         await roomRef.child('hostState').set(serializeHostState());
         const sent = await broadcastToGuests({type:'HOST_TRANSFER', nextHostUid:successor.id, nextHostSessionId:nextSession});
         if (sent.some(ok => !ok)) throw new Error('transfer-message-failed');
-        clearTimeout(persistTimer);
         await persistChain;
         await roomRef.child('hostConnections').child(localConnectionId).remove();
         await roomRef.child('hostConnections').child(localConnectionId).onDisconnect().cancel();
@@ -593,6 +617,13 @@ async function transferHost(keepSpectating){
         setPresence().catch(() => {});
         return false;
       }
+    }
+    else {
+      try {
+        await roomRef.child('meta').update({ closed:true, expiresAt:0 });
+        await roomRef.child('hostConnections').child(localConnectionId).remove();
+        await roomRef.child('hostConnections').child(localConnectionId).onDisconnect().cancel();
+      } catch(error){ reportRoomError(error, 'leave'); return false; }
     }
     if (keepSpectating) window.location.assign(roomUrl(roomCode, false));
     else leaveRoomUi();
@@ -613,6 +644,7 @@ async function exitGame(){
   } catch(error){ reportRoomError(error,'presence-leave'); }
   leaveRoomUi();
 }
+document.getElementById('btnLeaveLobby').addEventListener('click', exitGame);
 function handleHostTransfer(data){
   if (transferPending || !roomRef || !data.nextHostUid || !data.nextHostSessionId) return;
   transferPending = true;
@@ -643,11 +675,11 @@ function markConnectionLost(uid, reason){
   connectedGuestUids.delete(uid);
   const changed = engine.markDisconnected(uid);
   if (!changed) return;
+  if (reason === 'player-left' && hostPhase() === 'lobbyView') engine.removePlayer(uid);
   console.info('Rhyme Match player disconnected', { uid, reason });
   broadcastRoster();
-  if (document.getElementById('submitRhymeView').classList.contains('active')){
+  if (hostPhase() === 'submitRhymeView'){
     broadcastReadyStatus();
-    if (engine.allSubmitted()) openHostJudgingPhase();
   }
   setConnectionStatus(connectedGuestUids.size ? 'Room live — players connected' : 'Room live — waiting for players', 'online');
 }
@@ -657,21 +689,39 @@ function registerHostJoin(uid, data){
   }
   let player = engine.players.get(uid);
   const wasExisting = !!player;
+  const requested = String(data.name || 'Player').trim().slice(0,15) || 'Player';
+  const used = new Set([...engine.players.values()].filter(p => p.id !== uid).map(p => p.name.toLocaleLowerCase()));
+  let name = requested;
+  for (let suffix = 2; used.has(name.toLocaleLowerCase()); suffix++){
+    const ending = ` ${suffix}`;
+    name = requested.slice(0, 15 - ending.length) + ending;
+  }
   if (!player){
     const connected = [...engine.players.values()].filter(p => p.connected !== false).length;
     if (connected >= MAX_PLAYERS){ writeGuestMessage(uid, { type:'ERROR', code:'room-full' }); return; }
-    engine.addPlayer(uid, String(data.name || 'Player').trim().slice(0,15) || 'Player');
+    if (engine.players.size >= MAX_PLAYERS){
+      // Keep current-round members reconnectable; reclaim only records from older rounds.
+      const abandoned = [...engine.players.values()].find(p => p.connected === false && !engine.roundPlayerIds.includes(p.id));
+      if (abandoned) engine.removePlayer(abandoned.id);
+      else { writeGuestMessage(uid, { type:'ERROR', code:'room-full' }); return; }
+    }
+    engine.addPlayer(uid, name);
     player = engine.players.get(uid);
   }
+  else if (hostPhase() === 'lobbyView') player.name = name;
   player.connected = true;
   player.sessionId = data.sessionId;
   player.capabilities = data.capabilities || {};
-  player.pendingNextRound = !['lobbyView','targetSetupView'].includes(hostPhase()) && !(wasExisting && hostPhase() === 'resultsView');
+  player.pendingNextRound = !['lobbyView','targetSetupView'].includes(hostPhase()) &&
+    !(wasExisting && (engine.roundPlayerIds.includes(uid) || hostPhase() === 'resultsView'));
   connectedGuestUids.add(uid);
   writeGuestMessage(uid, {
     type:'ROOM_STATE', playerId:uid, clientSessionId:data.sessionId,
     players:[...engine.players.values()], mode:engine.mode, settings:engine.settings, roundRule:engine.roundRule, clockRun:engine.clockRun, round:engine.round,
-    phase:hostPhase(), waiting:player.pendingNextRound, results:hostPhase() === 'resultsView' ? lastResultsPacket : null
+    phase:hostPhase(), waiting:player.pendingNextRound, results:hostPhase() === 'resultsView' ? lastResultsPacket : null,
+    targetWord:engine.targetWord, roundStartedAt:engine.roundStartedAt, roundExpiresAt:engine.roundExpiresAt,
+    roundPlayerIds:engine.roundPlayerIds, lockedPlayerIds:[...engine.submissions.keys()],
+    judgingSubmissions:hostPhase() === 'judgingView' ? judgingSubmissions() : null
   });
   broadcastRoster();
   if (hostPhase() === 'submitRhymeView') broadcastReadyStatus();
@@ -685,9 +735,10 @@ function handleHostCommand(data){
   if (data.type === 'JOIN') registerHostJoin(uid, data);
   else if (connectedGuestUids.has(uid) && data.type === 'LEAVE') markConnectionLost(uid, 'player-left');
   else if (connectedGuestUids.has(uid) && data.type === 'SUBMIT_RHYME' && hostPhase() === 'submitRhymeView'){
-    engine.registerSubmission(uid, data.word || '', data.pick);
-    broadcastReadyStatus();
-    if (engine.allSubmitted()) openHostJudgingPhase();
+    if (engine.registerSubmission(uid, data.word, data.pick, data.round, data.at)){
+      broadcastReadyStatus();
+      if (engine.allSubmitted()) openHostJudgingPhase();
+    }
   }
   queuePersist();
 }
@@ -696,7 +747,15 @@ function startHostSubscriptions(){
   subscribe(roomRef.child('commands'), 'child_changed', snap => handleHostCommand(snap.val()), error => reportRoomError(error, 'commands'));
   subscribe(roomRef.child('presence'), 'value', snap => {
     const all = snap.val() || {};
-    for (const uid of [...connectedGuestUids]) if (!all[uid] || !Object.keys(all[uid]).length) markConnectionLost(uid, 'presence-lost');
+    const ref = roomRef;
+    for (const uid of [...connectedGuestUids]){
+      if (all[uid] && Object.keys(all[uid]).length) continue;
+      // A cached absence can arrive after JOIN on a different path. Recheck the
+      // current presence record before treating that player as disconnected.
+      ref.child('presence').child(uid).once('value').then(latest => {
+        if (roomRef === ref && !latest.exists()) markConnectionLost(uid, 'presence-lost');
+      }).catch(error => reportRoomError(error, 'presence'));
+    }
   }, error => reportRoomError(error, 'presence'));
 }
 function broadcastRoster(){
@@ -722,11 +781,16 @@ function resumeHostView(state){
   if (state.phase === 'resultsView' && lastResultsPacket){
     const p = lastResultsPacket;
     displayResults(p.results, p.players, p.eliminatedNames, p.gameOver, p.winnerName);
-  } else if (state.phase === 'judgingView' || state.phase === 'submitRhymeView' || state.phase === 'spectatorView'){
+  } else if (state.phase === 'submitRhymeView'){
+    currentTimerSeconds = engine.roundRule?.timerSeconds || currentTimerSeconds;
+    startRhymeEntry(engine.targetWord);
+    if (recoverRoundPhase(state, serverNow()) === 'judgingView') expireRound();
+    else if (engine.allSubmitted()) openHostJudgingPhase();
+  } else if (state.phase === 'judgingView' || state.phase === 'spectatorView'){
     openHostJudgingPhase();
   } else if (state.phase === 'twistRevealView') showTwistReveal();
-  else if (state.phase === 'targetSetupView') UIManager.showView('targetSetupView');
-  else UIManager.showView('lobbyView');
+  else if (state.phase === 'targetSetupView') showHostView('targetSetupView');
+  else showHostView('lobbyView');
   queuePersist();
 }
 async function startHost(){
@@ -743,12 +807,13 @@ async function startHost(){
     rememberName(localName);
     hostUid = myUid;
     localConnectionId = roomRandomId();
-    if (incomingHost && validRoomCode(incomingHost.toUpperCase())){
-      roomCode = incomingHost.toUpperCase();
+    const resumeCode = new URL(window.location.href).searchParams.get('host');
+    if (resumeCode && validRoomCode(resumeCode.toUpperCase())){
+      roomCode = resumeCode.toUpperCase();
       roomRef = database.ref('rooms/' + roomCode);
       const [metaSnap, stateSnap] = await Promise.all([roomRef.child('meta').once('value'), roomRef.child('hostState').once('value')]);
       const meta = metaSnap.val();
-      if (!meta || meta.hostUid !== myUid) throw { code:'permission-denied' };
+      if (!meta || meta.closed || meta.hostUid !== myUid) throw { code:'permission-denied' };
       hostSessionId = meta.hostSessionId;
       restoreHostState(stateSnap.val() || {});
       if (!engine.players.has(myUid)) engine.addPlayer(myUid, localName);
@@ -773,7 +838,7 @@ async function startHost(){
       document.getElementById('hostLobbyControls').style.display = 'block';
       document.getElementById('hostModeSection').style.display = 'block';
       document.getElementById('clientModeSection').style.display = 'none';
-      UIManager.showView('lobbyView');
+      showHostView('lobbyView');
       renderModeGrid();
       broadcastRoster();
     }
@@ -792,11 +857,16 @@ document.getElementById('btnHostInit').addEventListener('click', startHost);
 function syncClientSnapshot(snapshot){
   if (!snapshot || snapshot.roomId !== roomCode || snapshot.hostUid !== hostUid || snapshot.hostSessionId !== joinedHostSessionId) return;
   lastPublicSnapshot = snapshot;
+  // Live event messages drive the current view; a lagging snapshot must not rewind its round.
+  if (!clientNeedsSync) return;
   lastKnownPlayers = snapshot.players || [];
   engine.mode = snapshot.mode || 'classic';
   engine.settings = normalizeModeSettings(snapshot.settings);
   engine.roundRule = snapshot.roundRule || null;
   engine.clockRun = snapshot.clockRun || null;
+  engine.roundStartedAt = snapshot.roundStartedAt ?? null;
+  engine.roundExpiresAt = snapshot.roundExpiresAt ?? null;
+  engine.roundPlayerIds = snapshot.roundPlayerIds || [];
   updateLobbyRules();
   currentRound = Math.max(1, snapshot.round || 1);
   UIManager.updateRoster(lastKnownPlayers);
@@ -806,13 +876,35 @@ function syncClientSnapshot(snapshot){
     localScore = me.score;
     UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated);
   }
-  if (!clientNeedsSync) return;
   clientNeedsSync = false;
-  if (snapshot.phase === 'lobbyView') UIManager.showView('lobbyView');
-  else if (snapshot.phase === 'resultsView' && snapshot.results){
-    const p = snapshot.results;
+  renderClientPhase(snapshot);
+}
+function renderClientPhase(state){
+  const me = lastKnownPlayers.find(p => p.id === myUid);
+  if (state.phase === 'lobbyView'){ UIManager.showView('lobbyView'); return; }
+  if (state.phase === 'resultsView' && state.results){
+    const p = state.results;
     displayResults(p.results, p.players, p.eliminatedNames, p.gameOver, p.winnerName);
-  } else showWaitingForNextRound('Reconnected to the same room; you can play from the next round.');
+    return;
+  }
+  if (state.waiting || me?.pendingNextRound || !state.roundPlayerIds?.includes(myUid)){
+    showWaitingForNextRound(); return;
+  }
+  if (state.phase === 'twistRevealView'){
+    engine.targetWord = state.targetWord;
+    showTwistReveal(); return;
+  }
+  if (state.phase === 'submitRhymeView'){
+    currentTimerSeconds = state.roundRule?.timerSeconds || currentTimerSeconds;
+    engine.roundExpiresAt = state.roundExpiresAt;
+    if (me?.eliminated) startSpectating(state.targetWord);
+    else startRhymeEntry(state.targetWord, state.lockedPlayerIds?.includes(myUid));
+    return;
+  }
+  if (state.phase === 'judgingView' && Array.isArray(state.judgingSubmissions)){
+    openClientJudgingPhase(state.targetWord, state.judgingSubmissions); return;
+  }
+  showWaitingForNextRound('Connected to the room; waiting for the next phase.');
 }
 function handleClientMessage(data, attempt){
   if (attempt !== clientAttempt || !data || data.roomId !== roomCode || data.hostId !== hostUid) return;
@@ -829,6 +921,8 @@ function handleClientMessage(data, attempt){
     }
     clearTimeout(clientJoinTimer);
     clientJoined = true;
+    clientNeedsSync = false;
+    try { sessionStorage.removeItem('rhymeMatchLeftRoom:' + roomCode); } catch(e){}
     joinedRoomId = roomCode;
     setJoinBusy(false);
     lastKnownPlayers = data.players;
@@ -836,6 +930,9 @@ function handleClientMessage(data, attempt){
     engine.settings = normalizeModeSettings(data.settings);
     engine.roundRule = data.roundRule || null;
     engine.clockRun = data.clockRun || null;
+    engine.roundStartedAt = data.roundStartedAt ?? null;
+    engine.roundExpiresAt = data.roundExpiresAt ?? null;
+    engine.roundPlayerIds = data.roundPlayerIds || [];
     currentRound = Math.max(1, data.round || 1);
     updateLobbyRules();
     document.getElementById('hostModeSection').style.display = 'none';
@@ -845,11 +942,7 @@ function handleClientMessage(data, attempt){
     if (!me.eliminated) saveSpectateChoice(false);
     localScore = me.score;
     UIManager.updateHeader(currentRound, localScore, engine.mode, me.eliminated);
-    if (data.phase === 'resultsView' && data.results && !data.waiting){
-      const p = data.results;
-      displayResults(p.results, p.players, p.eliminatedNames, p.gameOver, p.winnerName);
-    } else if (data.waiting) showWaitingForNextRound();
-    else UIManager.showView('lobbyView');
+    renderClientPhase(data);
     setConnectionStatus('Connected to verified room', 'online');
     Sound.lock();
     return;
@@ -893,6 +986,9 @@ function handleClientMessage(data, attempt){
       engine.roundRule = data.roundRule || { mode:data.mode, modifier:'none', timerSeconds:data.timerSeconds, challenge:null };
       engine.predictionRound = data.predictionRound || 0;
       engine.predictionStake = data.predictionStake || 0;
+      engine.roundStartedAt = data.startedAt;
+      engine.roundExpiresAt = data.expiresAt;
+      engine.roundPlayerIds = data.roundPlayerIds || engine.roundPlayerIds;
       const me = lastKnownPlayers.find(p => p.id === myUid);
       if (me && me.pendingNextRound){ showWaitingForNextRound(); break; }
       setConnectionStatus('Connected — round in progress', 'online');
@@ -944,15 +1040,15 @@ async function startClient(){
     roomRef = database.ref('rooms/' + roomCode);
     const metaSnap = await roomRef.child('meta').once('value');
     const meta = metaSnap.val();
-    if (!meta || meta.expiresAt < Date.now()) throw { code:'room-not-found' };
+    if (!meta || meta.closed || meta.expiresAt < Date.now()) throw { code:'room-not-found' };
     if (meta.hostUid === myUid) throw { code:'same-browser-host' };
     hostUid = meta.hostUid;
     joinedHostSessionId = meta.hostSessionId;
     localConnectionId = roomRandomId();
     showRoomIdentity(roomCode);
-    const existingMessage = await roomRef.child('messages').child(myUid).once('value');
-    lastEventSeq = existingMessage.val()?.seq || 0;
-    subscribe(roomRef.child('messages').child(myUid), 'value', snap => handleClientMessage(snap.val(), attempt), error => reportRoomError(error, 'messages'));
+    const existingMessage = await roomRef.child('messages').child(myUid).limitToLast(1).once('value');
+    lastEventSeq = Math.max(0, ...Object.values(existingMessage.val() || {}).map(message => Number(message?.seq) || 0));
+    subscribe(roomRef.child('messages').child(myUid).limitToLast(50), 'child_added', snap => handleClientMessage(snap.val(), attempt), error => reportRoomError(error, 'messages'));
     subscribe(roomRef.child('snapshot'), 'value', snap => {
       lastPublicSnapshot = snap.val();
       if (clientJoined) syncClientSnapshot(lastPublicSnapshot);
@@ -993,7 +1089,7 @@ try {
 if (incomingHost && validRoomCode(incomingHost.toUpperCase())){
   document.getElementById('btnHostInit').textContent = 'Resume Room';
   setTimeout(() => document.getElementById('btnHostInit').click(), 0);
-} else if (incomingRoom && validRoomCode(incomingRoom.toUpperCase()) && document.getElementById('inputPlayerName').value){
+} else if (incomingRoom && validRoomCode(incomingRoom.toUpperCase()) && document.getElementById('inputPlayerName').value && (() => { try { return sessionStorage.getItem('rhymeMatchLeftRoom:' + incomingRoom.toUpperCase()) !== 'yes'; } catch(e){ return true; } })()){
   setTimeout(() => document.getElementById('btnJoinInit').click(), 0);
 }
 
@@ -1004,11 +1100,18 @@ function startNextRound(action){
   else startQuickRound();
 }
 function beginRound(targetWord){
-  const challenge = prepareRound(engine, targetWord);
+  if (!isHost || !['lobbyView','targetSetupView','resultsView'].includes(hostPhase())) return;
+  const normalized = normalizeWord(targetWord);
+  if (!normalized){ showToast('Pick or type a target word first.', 'error'); return; }
+  const prepared = prepareRound(engine, normalized);
+  if (prepared.error){
+    showToast(prepared.error === 'min-players' ? 'At least two active players are needed to start a round.' : 'This target has no supported Twist challenge. Choose another word.', 'error');
+    return;
+  }
   currentRound = engine.round;
   currentTimerSeconds = engine.roundRule.timerSeconds;
   broadcastRoster();
-  if (challenge){
+  if (prepared.challenge){
     broadcastToGuests({ type:'TWIST_REVEAL', targetWord:engine.targetWord, round:engine.round, mode:engine.mode, roundRule:engine.roundRule });
     showTwistReveal();
     return;
@@ -1016,7 +1119,7 @@ function beginRound(targetWord){
   launchRoundTimer();
 }
 function showTwistReveal(){
-  UIManager.showView('twistRevealView');
+  if (isHost) showHostView('twistRevealView'); else UIManager.showView('twistRevealView');
   document.getElementById('twistRound').textContent = currentRound;
   document.getElementById('twistChallenge').textContent = engine.roundRule?.challenge?.text || 'Find a creative rhyme.';
   document.getElementById('twistTarget').textContent = engine.targetWord;
@@ -1028,7 +1131,9 @@ document.getElementById('btnBeginTwist').addEventListener('click', () => {
   if (isHost && hostPhase() === 'twistRevealView') launchRoundTimer();
 });
 function launchRoundTimer(){
-  broadcastToGuests({ type:'START_RHYME_PHASE', targetWord:engine.targetWord, round:engine.round, mode:engine.mode, timerSeconds:currentTimerSeconds, roundRule:engine.roundRule, predictionRound:engine.predictionRound, predictionStake:engine.predictionStake });
+  startRoundClock(engine, serverNow());
+  queuePersist();
+  broadcastToGuests({ type:'START_RHYME_PHASE', targetWord:engine.targetWord, round:engine.round, mode:engine.mode, timerSeconds:currentTimerSeconds, roundRule:engine.roundRule, predictionRound:engine.predictionRound, predictionStake:engine.predictionStake, startedAt:engine.roundStartedAt, expiresAt:engine.roundExpiresAt, roundPlayerIds:engine.roundPlayerIds });
   startRhymeEntry(engine.targetWord);
 }
 function startQuickRound(){
@@ -1036,7 +1141,9 @@ function startQuickRound(){
 }
 /* --- TARGET SETUP (HOST) --- */
 document.getElementById('btnStartRound').addEventListener('click', () => {
-  UIManager.showView('targetSetupView');
+  if (!isHost || !['lobbyView','resultsView'].includes(hostPhase())) return;
+  if (engine.activePlayers().length < 2){ showToast('At least two active players are needed to start a round.', 'error'); return; }
+  showHostView('targetSetupView');
   renderModeGrid();
   queuePersist();
   document.getElementById('inputCustomTarget').value = '';
@@ -1068,7 +1175,7 @@ document.getElementById('btnRandomWord').addEventListener('click', () => {
 });
 
 document.getElementById('btnConfirmTarget').addEventListener('click', () => {
-  const word = document.getElementById('inputCustomTarget').value.trim();
+  const word = normalizeWord(document.getElementById('inputCustomTarget').value);
   if (!word) { shakeInput(document.getElementById('inputCustomTarget')); showToast('Pick or type a target word first.', 'error'); return; }
   beginRound(word);
 });
@@ -1101,10 +1208,10 @@ document.getElementById('btnSpectatorExit').addEventListener('click', exitGame);
 
 /* --- RHYME SUBMISSION & TIMER --- */
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52;
-function startRhymeEntry(targetWord){
+function startRhymeEntry(targetWord, alreadyLocked = false){
   const me = lastKnownPlayers.find(p => p.id === myUid);
   UIManager.updateHeader(currentRound, me ? me.score : localScore, engine.mode, false);
-  UIManager.showView('submitRhymeView');
+  if (isHost) showHostView('submitRhymeView'); else UIManager.showView('submitRhymeView');
   document.getElementById('displayTargetWord').innerText = targetWord;
   document.getElementById('displayTargetWord').classList.toggle('long-word', targetWord.length > 9);
   const predictionBox = document.getElementById('answerPrediction');
@@ -1134,29 +1241,33 @@ function startRhymeEntry(targetWord){
   inputEl.placeholder = `Rhyme with ${targetWord}`;
   inputEl.value = '';
   inputEl.type = 'password';
-  inputEl.disabled = false;
+  inputEl.disabled = alreadyLocked || (isHost && engine.submissions.has(myUid));
   document.getElementById('btnToggleVisibility').innerText = 'Show';
 
   const submitBtn = document.getElementById('btnSubmitRhyme');
   submitBtn.disabled = true;
-  document.getElementById('rhymeWaitMsg').style.display = 'none';
-  updateReadyStatus(0, lastKnownPlayers.filter(p => !p.eliminated && p.connected !== false && !p.pendingNextRound).length);
-  inputEl.focus();
+  document.getElementById('rhymeWaitMsg').style.display = inputEl.disabled ? 'block' : 'none';
+  updateReadyStatus(isHost ? engine.submissions.size : 0, engine.roundPlayerIds.length);
 
   const ring = document.getElementById('timerRingFg');
   ring.style.strokeDasharray = String(RING_CIRCUMFERENCE);
   ring.classList.remove('warn','danger');
   document.getElementById('submitStageCard').classList.remove('time-low');
 
-  let timeLeft = currentTimerSeconds;
+  let timeLeft = Math.max(0, Math.ceil((engine.roundExpiresAt - serverNow()) / 1000));
   const total = currentTimerSeconds;
-  const deadline = performance.now() + total * 1000;
+  const deadline = engine.roundExpiresAt;
   document.getElementById('timerDisplay').innerText = timeLeft;
   updateRing(ring, timeLeft, total);
   clearInterval(countdownInterval);
+  clearTimeout(autoSubmitTimer);
+  if (!inputEl.disabled && deadline > serverNow()){
+    autoSubmitTimer = setTimeout(() => processRhymeSubmission(true), Math.max(0, deadline - serverNow() - 350));
+  }
 
+  if (timeLeft === 0 && isHost){ expireRound(); return; }
   countdownInterval = setInterval(() => {
-    timeLeft = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
+    timeLeft = Math.max(0, Math.ceil((deadline - serverNow()) / 1000));
     document.getElementById('timerDisplay').innerText = Math.max(timeLeft, 0);
     updateRing(ring, timeLeft, total);
     if (timeLeft <= Math.min(5, total)) {
@@ -1166,14 +1277,7 @@ function startRhymeEntry(targetWord){
     if (timeLeft <= 0) {
       clearInterval(countdownInterval);
       document.getElementById('submitStageCard').classList.remove('time-low');
-      if (!inputEl.disabled) processRhymeSubmission(true);
-      if (isHost && document.getElementById('submitRhymeView').classList.contains('active')){
-        engine.activePlayers().forEach(player => {
-          if (!engine.submissions.has(player.id)) engine.registerSubmission(player.id, '');
-        });
-        broadcastReadyStatus();
-        openHostJudgingPhase();
-      }
+      if (isHost && hostPhase() === 'submitRhymeView') expireRound();
     }
   }, 1000);
 }
@@ -1185,38 +1289,67 @@ function updateRing(ring, timeLeft, total){
   else if (frac <= 0.6) ring.classList.add('warn');
 }
 
-document.getElementById('btnSubmitRhyme').addEventListener('click', () => processRhymeSubmission(false));
+document.getElementById('rhymeForm').addEventListener('submit', event => {
+  event.preventDefault();
+  processRhymeSubmission(false);
+});
 
 function processRhymeSubmission(isAutoSubmit){
+  if (document.getElementById('inputRhyme').disabled) return;
+  clearTimeout(autoSubmitTimer);
+  if (!isAutoSubmit && !normalizeWord(document.getElementById('inputRhyme').value)) return;
   if (!isHost) clearInterval(countdownInterval);
   const rhyme = document.getElementById('inputRhyme').value.trim();
   const pick = !document.getElementById('answerPrediction').hidden ? document.getElementById('predictionPick').value || null : null;
-  if (isAutoSubmit && document.getElementById('inputRhyme').disabled) return;
-
   document.getElementById('inputRhyme').disabled = true;
   document.getElementById('btnSubmitRhyme').disabled = true;
   document.getElementById('submitStageCard').classList.remove('time-low');
   Sound.lock();
 
   const msgEl = document.getElementById('rhymeWaitMsg');
-  if (isAutoSubmit && !rhyme) msgEl.innerText = "Time's up! No word submitted (penalty applied). Waiting for others...";
-  else if (isAutoSubmit) msgEl.innerText = "Time's up! Your word was auto-submitted. Waiting for others...";
+  if (isAutoSubmit && !rhyme) msgEl.innerText = 'Timer ending — no word entered. Waiting for the host...';
+  else if (isAutoSubmit) msgEl.innerText = 'Timer ending — locking your word. Waiting for the host...';
   else msgEl.innerText = "Locked in! Waiting for everyone else...";
   msgEl.style.display = 'block';
 
   if (isHost) {
-    engine.registerSubmission(myUid, rhyme, pick);
-    broadcastReadyStatus();
-    if (engine.allSubmitted()) openHostJudgingPhase();
+    if (engine.registerSubmission(myUid, rhyme, pick, engine.round, isAutoSubmit ? Math.min(serverNow(), engine.roundExpiresAt) : serverNow())){
+      broadcastReadyStatus();
+      if (engine.allSubmitted()) openHostJudgingPhase();
+    }
   } else {
-    sendGuestCommand({ type:'SUBMIT_RHYME', word: rhyme, pick });
+    sendGuestCommand({ type:'SUBMIT_RHYME', word: rhyme, pick, round:currentRound });
   }
 }
 
 /* --- HOST JUDGING PHASE --- */
+function fillRoundTimeouts(){ engine.roundPlayers().forEach(player => engine.registerTimeout(player.id)); }
+async function expireRound(){
+  if (!isHost || hostPhase() !== 'submitRhymeView' || expiringRound) return;
+  expiringRound = true;
+  const round = engine.round;
+  try {
+    const commands = await roomRef.child('commands').once('value');
+    if (!isHost || hostPhase() !== 'submitRhymeView' || engine.round !== round) return;
+    Object.values(commands.val() || {}).forEach(handleHostCommand);
+    if (hostPhase() !== 'submitRhymeView') return;
+    fillRoundTimeouts();
+    broadcastReadyStatus();
+    openHostJudgingPhase();
+  } catch(error){ reportRoomError(error, 'round-expiry'); }
+  finally { expiringRound = false; }
+}
+function judgingSubmissions(){
+  return [...engine.submissions].map(([id, s]) => ({
+    name:engine.players.get(id)?.name || 'Player', word:s.word, timeout:s.timeout,
+    colorIndex:engine.players.get(id)?.colorIndex || 0
+  }));
+}
 function openHostJudgingPhase(){
+  if (!isHost || !['submitRhymeView','judgingView'].includes(hostPhase())) return;
   clearInterval(countdownInterval);
-  UIManager.showView('judgingView');
+  clearTimeout(autoSubmitTimer);
+  showHostView('judgingView');
   document.getElementById('judgeTargetWord').innerText = engine.targetWord;
   document.getElementById('hostJudgeControls').style.display = 'block';
   document.getElementById('clientJudgeWaitMsg').style.display = 'none';
@@ -1224,9 +1357,7 @@ function openHostJudgingPhase(){
 
   renderHostJudgeItems();
 
-  const payload = Array.from(engine.submissions.entries()).map(([id, s]) => ({
-    name: engine.players.get(id).name, word: s.word, timeout: s.timeout, colorIndex: engine.players.get(id).colorIndex
-  }));
+  const payload = judgingSubmissions();
   broadcastToGuests({ type:'JUDGING_PHASE', targetWord: engine.targetWord, submissions: payload });
 }
 
@@ -1234,13 +1365,13 @@ function renderHostJudgeItems(){
   const list = document.getElementById('judgeSubmissionList');
   list.innerHTML = '';
   const wordCounts = {};
-  engine.submissions.forEach(s => { if (!s.timeout) wordCounts[s.word] = (wordCounts[s.word] || 0) + 1; });
+  engine.submissions.forEach(s => { if (!s.timeout && s.valid) wordCounts[s.word] = (wordCounts[s.word] || 0) + 1; });
 
   engine.submissions.forEach((sub, id) => {
     const player = engine.players.get(id);
     if (!player) return;
     const div = document.createElement('div');
-    const isMatch = !sub.timeout && wordCounts[sub.word] > 1;
+    const isMatch = sub.valid && !sub.timeout && wordCounts[sub.word] > 1;
     div.className = 'judge-item' + (isMatch ? ' matched' : '');
 
     if (sub.timeout) {
@@ -1252,8 +1383,8 @@ function renderHostJudgeItems(){
         <div><div class="judge-name">${avatarDot(player.colorIndex)}${escapeHtml(player.name)}</div>
           <span class="judge-word">${escapeHtml(sub.word)}</span>${isMatch ? `<span class="match-badge">×${wordCounts[sub.word]} match</span>` : ''}
         </div>
-        <button class="judge-toggle-btn ${sub.valid ? 'btn-success' : 'btn-danger'}">${sub.valid ? 'Valid ✓' : 'Invalid ✗'}</button>`;
-      div.querySelector('button').onclick = () => { Sound.click(); engine.toggleWordValidity(id); renderHostJudgeItems(); };
+        <button class="judge-toggle-btn ${sub.valid ? 'btn-success' : 'btn-danger'}" ${sub.word === engine.targetWord ? 'disabled' : ''}>${sub.word === engine.targetWord ? 'Target word ✗' : sub.valid ? 'Valid ✓' : 'Invalid ✗'}</button>`;
+      if (sub.word !== engine.targetWord) div.querySelector('button').onclick = () => { Sound.click(); engine.toggleWordValidity(id); renderHostJudgeItems(); };
     }
     list.appendChild(div);
   });
@@ -1275,7 +1406,7 @@ function openClientJudgingPhase(targetWord, submissions){
 }
 
 document.getElementById('btnFinalizeScores').addEventListener('click', () => {
-  if (!isHost) return;
+  if (!isHost || hostPhase() !== 'judgingView') return;
   const results = engine.calculateScores();
   updatePredictionResults(engine, results);
   const elim = engine.applyElimination();
@@ -1297,7 +1428,7 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
   if (me) { localScore = me.score; UIManager.updateHeader(results.round, localScore, results.mode || engine.mode, me.eliminated); }
   lastKnownPlayers = players;
 
-  UIManager.showView('resultsView');
+  if (isHost) showHostView('resultsView'); else UIManager.showView('resultsView');
   UIManager.renderScoreboard(players);
   document.getElementById('eliminatedChoices').hidden = !me?.eliminated || me.connected === false || hasChosenSpectate();
 
@@ -1368,7 +1499,7 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
         currentRound = 1;
         UIManager.updateHeader(1, 0, engine.mode, false);
         broadcastRoster();
-        UIManager.showView('targetSetupView');
+        showHostView('targetSetupView');
         renderModeGrid();
       };
     } else {
@@ -1391,7 +1522,10 @@ function displayResults(results, players, eliminatedNames, gameOver, winnerName)
       engine.players.forEach(p => { p.score = 0; p.delta = 0; p.lastDelta = null; p.eliminated = false; p.streak = 0; p.bountyRun = 0; p.lives = 3; p.roundBonus = 0; p.roundEvent = ''; });
       localScore = 0; currentRound = 1;
       UIManager.updateHeader(1, 0, engine.mode, false);
-      UIManager.showView('lobbyView');
+      engine.roundPlayerIds = [];
+      engine.roundStartedAt = null;
+      engine.roundExpiresAt = null;
+      showHostView('lobbyView');
       broadcastRoster();
       engine.promoteWaiting();
       broadcastRoster();

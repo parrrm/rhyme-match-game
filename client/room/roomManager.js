@@ -5,6 +5,7 @@ const subscriptions = [];
 let database = null;
 let auth = null;
 let lastCommandSeq = 0;
+const fallbackSessions = new Map();
 
 function roomRandomId(){
   if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -21,7 +22,10 @@ function localSessionId(code){
     let value = sessionStorage.getItem(key);
     if (!value){ value = roomRandomId(); sessionStorage.setItem(key, value); }
     return value;
-  } catch(e){ return roomRandomId(); }
+  } catch(e){
+    if (!fallbackSessions.has(code)) fallbackSessions.set(code, roomRandomId());
+    return fallbackSessions.get(code);
+  }
 }
 function subscribe(ref, event, callback, cancel){ ref.on(event, callback, cancel); subscriptions.push(() => ref.off(event, callback)); }
 function clearSubscriptions(){ subscriptions.splice(0).forEach(off => off()); }
@@ -59,11 +63,12 @@ async function publishPresence(roomRef, isHost, myUid, localConnectionId){
   await ref.onDisconnect().remove();
   await ref.set({ at:firebase.database.ServerValue.TIMESTAMP });
 }
-function persistHostState(roomRef, state, snapshot){
-  return Promise.all([roomRef.child('hostState').set(state), roomRef.child('snapshot').set(snapshot)]);
+async function persistHostState(roomRef, state, snapshot){
+  await roomRef.child('hostState').set(state);
+  await roomRef.child('snapshot').set(snapshot);
 }
 function publishHostMessage(roomRef, uid, message){
-  return roomRef.child('messages').child(uid).set(message);
+  return roomRef.child('messages').child(uid).child(String(message.seq)).set(message);
 }
 function publishGuestCommand(roomRef, uid, command){
   return roomRef.child('commands').child(uid).set(command);

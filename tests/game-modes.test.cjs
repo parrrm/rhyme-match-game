@@ -15,6 +15,9 @@ function round(engine, mode, modifier, answers){
   engine.mode = mode;
   engine.initRound('CAT');
   engine.roundRule = {modifier};
+  engine.phase = 'submitRhymeView';
+  engine.roundExpiresAt = Date.now() + 20000;
+  engine.roundPlayerIds = engine.activePlayers().map(p => p.id);
   answers.forEach(([id, word]) => engine.registerSubmission(id, word));
   return engine.calculateScores();
 }
@@ -49,6 +52,9 @@ test('prediction choice locks with first submitted answer and skip is explicit',
   const e = new Engine(); e.addPlayer('a','A'); e.addPlayer('b','B');
   e.predictionRound = 1;
   e.initRound('CAT');
+  e.phase = 'submitRhymeView';
+  e.roundExpiresAt = Date.now() + 20000;
+  e.roundPlayerIds = ['a','b'];
   e.registerSubmission('a','BAT','b');
   e.registerSubmission('b','BAT',null);
   assert.equal(e.predictions.get('a'),'b');

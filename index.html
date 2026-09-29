@@ -152,6 +152,7 @@
       <div class="lobby-actions">
         <p id="lobbyStatusMessage" role="status" aria-live="polite">🔒 Waiting for 1 more player</p>
         <div id="hostLobbyControls" style="display:none;"><button id="btnStartRound" class="btn-primary" disabled>Start Game</button></div>
+        <button id="btnLeaveLobby" type="button" class="btn-ghost">Leave Lobby</button>
         <p id="lobbyActionHint">Invite someone using the QR code above.</p>
       </div>
     </div>
@@ -179,7 +180,7 @@
 
       <div class="divider"></div>
       <label class="field-label" for="inputCustomTarget">...or type your own</label>
-      <input type="text" id="inputCustomTarget" placeholder="Enter a target word">
+      <input type="text" id="inputCustomTarget" maxlength="64" placeholder="Enter a target word">
       <button class="btn-primary btn-block" id="btnConfirmTarget" style="margin-top:12px;">Start Timer</button>
     </div>
 
@@ -206,9 +207,10 @@
         </div>
       </div>
 
+      <form id="rhymeForm">
       <div class="input-group">
         <label class="visually-hidden" for="inputRhyme">Your rhyming word</label>
-        <input type="password" id="inputRhyme" placeholder="Your rhyming word" autocomplete="off">
+        <input type="password" id="inputRhyme" maxlength="64" placeholder="Your rhyming word" autocomplete="off">
         <button type="button" id="btnToggleVisibility" class="toggle-visibility">Show</button>
       </div>
       <div id="answerRule" class="answer-rule" role="status" aria-live="polite" hidden></div>
@@ -219,6 +221,7 @@
       </div>
 
       <button class="btn-primary btn-block" id="btnSubmitRhyme" disabled>Lock In Rhyme</button>
+      </form>
       <p id="readyStatus" class="ready-status" role="status" aria-live="polite">0 / 0 players ready</p>
       <p id="rhymeWaitMsg" style="display:none;text-align:center;margin-top:10px;">Locked in! Waiting for everyone else...</p>
     </div>

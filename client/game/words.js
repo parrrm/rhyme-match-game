@@ -1,5 +1,6 @@
 /* Curated US-English rhyme families. The bank is a hint for target/twist selection;
    the human host remains authoritative when judging submitted words. */
+import { normalizeWord } from './normalize.js';
 const f = (easy, medium = '', hard = '') => ({
   easy: easy.split(' ').filter(Boolean),
   medium: medium.split(' ').filter(Boolean),
@@ -203,7 +204,7 @@ const RECENT_TARGET_LIMIT = 18;
 const RECENT_FAMILY_LIMIT = 8;
 const HISTORY_KEY = 'rhymeMatchTargets';
 
-function normalize(word) { return String(word ?? '').trim().toUpperCase(); }
+const normalize = normalizeWord;
 function familyOf(word) {
   const upper = normalize(word);
   return wordToFamily.get(upper) || `other:${upper.slice(-3)}`;

@@ -34,7 +34,7 @@
         "commands": {
           ".read": "auth != null && root.child('rooms').child($room).child('meta').child('hostUid').val() === auth.uid",
           "$uid": {
-            ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.child('uid').val() === auth.uid && newData.child('seq').isNumber() && (!data.exists() || newData.child('seq').val() > data.child('seq').val())"
+            ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.child('uid').val() === auth.uid && newData.child('seq').isNumber() && newData.child('at').isNumber() && newData.child('at').val() >= now - 1000 && newData.child('at').val() <= now + 1000 && (!data.exists() || newData.child('seq').val() > data.child('seq').val())"
           }
         },
         "messages": {
